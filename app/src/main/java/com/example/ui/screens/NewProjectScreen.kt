@@ -111,6 +111,8 @@ fun NewProjectScreen(
     audioLoadState: AudioLoadState,
     previewPlayer: PreviewAudioPlayer,
     previewPlayerState: PreviewPlayerState,
+    useOnDeviceSeparation: Boolean = true,
+    onToggleEngine: (Boolean) -> Unit = {},
     onSelectAudioUri: (Uri) -> Unit,
     onResetAudioLoad: () -> Unit,
     onSelectSample: (title: String, artist: String, key: String, notes: String) -> Unit,
@@ -785,16 +787,86 @@ fun NewProjectScreen(
                         )
                         val detectedKeyObj = (audioLoadState as? AudioLoadState.Success)?.audioInfo?.detectedKey
                         if (detectedKeyObj != null) {
-                            Text(
-                                text = "Detectado pela IA: ${detectedKeyObj.rootKey} ★",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = AccentGold
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(AccentGold.copy(alpha = 0.15f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "Cifra Club Oficial",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                        color = AccentGold,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${detectedKeyObj.rootKey} ★",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = AccentGold
+                                )
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     val detectedKeyObj = (audioLoadState as? AudioLoadState.Success)?.audioInfo?.detectedKey
+                    if (detectedKeyObj != null) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+                            border = CardDefaults.outlinedCardBorder().copy(
+                                brush = Brush.horizontalGradient(
+                                    listOf(AccentGold.copy(alpha = 0.5f), PrimaryPurple.copy(alpha = 0.3f))
+                                )
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(AccentGold.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = AccentGold,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Tom: ${detectedKeyObj.fullKeyName}",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = AccentGold
+                                    )
+                                    val sourceInfo = if (detectedKeyObj.songIdentified != null) {
+                                        "${detectedKeyObj.songIdentified} • Base Cifra Club"
+                                    } else {
+                                        "Identificado pelo motor Cifra Club"
+                                    }
+                                    Text(
+                                        text = sourceInfo,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -806,7 +878,7 @@ fun NewProjectScreen(
                                 selected = selectedKey == key,
                                 onClick = { selectedKey = key },
                                 label = {
-                                    Text(if (isDetected) "$key ★" else key)
+                                    Text(if (isDetected) "$key (Cifra Club)" else key)
                                 },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = AccentGold,
@@ -946,6 +1018,91 @@ fun NewProjectScreen(
             }
         }
 
+        // Section: Engine Selection (On-Device vs Remote Server)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = Brush.linearGradient(listOf(DarkSurfaceBorder, DarkSurfaceBorder))
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Motor de Separação",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = TextPrimary
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (useOnDeviceSeparation) SuccessGreen.copy(alpha = 0.15f) else PrimaryPurple.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = if (useOnDeviceSeparation) "Sem Servidor (Nativo)" else "Servidor Remoto",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (useOnDeviceSeparation) SuccessGreen else PrimaryPurpleLight
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = useOnDeviceSeparation,
+                            onClick = { onToggleEngine(true) },
+                            label = { Text("No Celular (Nativo)") },
+                            modifier = Modifier.weight(1f),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentGold,
+                                selectedLabelColor = DarkBackground,
+                                containerColor = DarkSurfaceElevated,
+                                labelColor = TextSecondary
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        FilterChip(
+                            selected = !useOnDeviceSeparation,
+                            onClick = { onToggleEngine(false) },
+                            label = { Text("Servidor Demucs") },
+                            modifier = Modifier.weight(1f),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PrimaryPurple,
+                                selectedLabelColor = DarkBackground,
+                                containerColor = DarkSurfaceElevated,
+                                labelColor = TextSecondary
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (useOnDeviceSeparation) {
+                            "Recomendado para uso no celular: processa o louvor diretamente no dispositivo com aceleração de hardware sem depender de backend externo."
+                        } else {
+                            "Requer container Demucs v4 em execução na rede local ou em servidor HTTPS."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+        }
+
         // Section: Submit Action Button
         item {
             val loadedFile = (audioLoadState as? AudioLoadState.Success)?.audioInfo?.file
@@ -955,12 +1112,13 @@ fun NewProjectScreen(
                 onClick = {
                     val finalTitle = songTitle.ifBlank { "Louvor Sem Título" }
                     val finalArtist = artistName.ifBlank { "Ministério de Louvor" }
+                    val modelName = if (useOnDeviceSeparation) "IA Vocal Integrada no Celular" else "Demucs v4 Hybrid AI (Naipes Vocais)"
                     onStartSeparation(
                         finalTitle,
                         finalArtist,
                         selectedKey,
                         rehearsalNotes,
-                        "Demucs v4 Hybrid AI (Naipes Vocais)",
+                        modelName,
                         "WAV (Alta Fidelidade)",
                         loadedFile,
                         durationSec
@@ -983,7 +1141,7 @@ fun NewProjectScreen(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Separar Vozes com IA",
+                    text = if (useOnDeviceSeparation) "Separar Vozes no Celular com IA" else "Separar Vozes com IA (Servidor)",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
                 )
             }

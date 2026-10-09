@@ -69,7 +69,8 @@ import com.example.viewmodel.ProcessingUiState
 fun ProcessingScreen(
     state: ProcessingUiState,
     onCancel: () -> Unit,
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onRetryOnDevice: () -> Unit = {}
 ) {
     if (state.isError) {
         Column(
@@ -99,7 +100,7 @@ fun ProcessingScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Não foi possível separar as vozes",
+                text = "Não foi possível conectar ao servidor",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                 color = TextPrimary,
                 textAlign = TextAlign.Center
@@ -123,7 +124,7 @@ fun ProcessingScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = state.errorSuggestion,
+                        text = "No celular, você pode utilizar o Motor Nativo Integrado para separar vozes sem precisar de servidor remoto na rede.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                         lineHeight = 18.sp
@@ -134,19 +135,34 @@ fun ProcessingScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
-                onClick = onNavigateToSettings,
+                onClick = onRetryOnDevice,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
+                    .height(52.dp)
+                    .testTag("retry_on_device_button"),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AccentGold,
                     contentColor = DarkBackground
                 )
             ) {
+                Icon(Icons.Default.GraphicEq, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Separar no Celular (Modo Nativo)", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = onNavigateToSettings,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
                 Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Configurar Servidor de IA", fontWeight = FontWeight.Bold)
+                Text("Configurar IP do Servidor", color = TextSecondary)
             }
 
             Spacer(modifier = Modifier.height(10.dp))

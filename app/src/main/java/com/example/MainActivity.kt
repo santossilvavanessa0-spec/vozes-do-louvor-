@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
                 val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
                 val preferredFormat by viewModel.preferredFormat.collectAsStateWithLifecycle()
                 val backendStatus by viewModel.backendStatus.collectAsStateWithLifecycle()
+                val useOnDeviceSeparation by viewModel.useOnDeviceSeparation.collectAsStateWithLifecycle()
 
                 // Listen to UI Events (Toast & Share)
                 LaunchedEffect(Unit) {
@@ -154,10 +155,11 @@ class MainActivity : ComponentActivity() {
                                     audioLoadState = audioLoadState,
                                     previewPlayer = viewModel.previewPlayer,
                                     previewPlayerState = previewPlayerState,
+                                    useOnDeviceSeparation = useOnDeviceSeparation,
+                                    onToggleEngine = { viewModel.setEngineMode(it) },
                                     onSelectAudioUri = { viewModel.loadAudioFromUri(it) },
                                     onResetAudioLoad = { viewModel.resetAudioLoad() },
                                     onSelectSample = { title, artist, key, notes ->
-                                        // When selecting sample, inform user
                                         viewModel.resetAudioLoad()
                                     },
                                     onStartSeparation = { title, artist, key, notes, model, format, file, duration ->
@@ -178,7 +180,8 @@ class MainActivity : ComponentActivity() {
                                 ProcessingScreen(
                                     state = processingState,
                                     onCancel = { viewModel.cancelProcessing() },
-                                    onNavigateToSettings = { viewModel.navigateTo(Screen.SETTINGS) }
+                                    onNavigateToSettings = { viewModel.navigateTo(Screen.SETTINGS) },
+                                    onRetryOnDevice = { viewModel.retrySeparationOnDevice() }
                                 )
                             }
                             Screen.RESULT_STUDIO -> {

@@ -23,20 +23,27 @@ object SeparationApiClient {
         .add(KotlinJsonAdapterFactory())
         .build()
 
+    // Client para upload e separação pesada (Demucs pode levar 30-90s)
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(180, TimeUnit.SECONDS) // Separation can take 30-90s on GPU/CPU
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .addInterceptor(HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         })
         .build()
 
-    private fun getService(baseUrl: String): SeparationApiService {
+    // Client rápido para ping de integridade (timeout de 2.5s para não travar celulares)
+    private val healthHttpClient = OkHttpClient.Builder()
+        .connectTimeout(2500, TimeUnit.MILLISECONDS)
+        .readTimeout(2500, TimeUnit.MILLISECONDS)
+        .build()
+
+    private fun getService(baseUrl: String, client: OkHttpClient = okHttpClient): SeparationApiService {
         val cleanUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
         return Retrofit.Builder()
             .baseUrl(cleanUrl)
-            .client(okHttpClient)
+            .client(client)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(SeparationApiService::class.java)
@@ -44,7 +51,7 @@ object SeparationApiClient {
 
     suspend fun checkHealth(baseUrl: String): Result<HealthResponse> = withContext(Dispatchers.IO) {
         try {
-            val service = getService(baseUrl)
+            val service = getService(baseUrl, healthHttpClient)
             val response = service.checkHealth()
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
@@ -61,8 +68,7 @@ object SeparationApiClient {
             preferredUrl,
             "http://10.0.2.2:8001",
             "http://localhost:8001",
-            "http://10.0.2.2:8000",
-            "http://localhost:8000"
+            "http://10.0.2.2:8000"
         ).distinct()
 
         for (url in candidateUrls) {
@@ -80,7 +86,7 @@ object SeparationApiClient {
         modelName: String = "htdemucs"
     ): Result<SeparationResponse> = withContext(Dispatchers.IO) {
         try {
-            val service = getService(baseUrl)
+            val service = getService(baseUrl, okHttpClient)
             val mediaType = "audio/*".toMediaTypeOrNull()
             val requestFile = audioFile.asRequestBody(mediaType)
             val filePart = MultipartBody.Part.createFormData("file", audioFile.name, requestFile)
