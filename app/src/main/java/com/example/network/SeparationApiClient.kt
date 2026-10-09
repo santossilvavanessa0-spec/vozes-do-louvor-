@@ -24,7 +24,7 @@ object SeparationApiClient {
         .build()
 
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS) // Separation can take 30-90s on GPU/CPU
         .writeTimeout(60, TimeUnit.SECONDS)
         .addInterceptor(HttpLoggingInterceptor().apply {
@@ -54,6 +54,24 @@ object SeparationApiClient {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun discoverActiveServer(preferredUrl: String): String? = withContext(Dispatchers.IO) {
+        val candidateUrls = listOf(
+            preferredUrl,
+            "http://10.0.2.2:8001",
+            "http://localhost:8001",
+            "http://10.0.2.2:8000",
+            "http://localhost:8000"
+        ).distinct()
+
+        for (url in candidateUrls) {
+            val result = checkHealth(url)
+            if (result.isSuccess) {
+                return@withContext url
+            }
+        }
+        null
     }
 
     suspend fun separateAudio(

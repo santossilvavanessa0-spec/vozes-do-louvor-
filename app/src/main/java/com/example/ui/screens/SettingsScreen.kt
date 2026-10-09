@@ -135,7 +135,7 @@ fun SettingsScreen(
                             onUpdateBackendUrl(it)
                         },
                         label = { Text("URL do Backend") },
-                        placeholder = { Text("http://10.0.2.2:8000 ou IP do seu PC") },
+                        placeholder = { Text("http://10.0.2.2:8001 ou IP do seu PC") },
                         leadingIcon = {
                             Icon(Icons.Default.Dns, contentDescription = null, tint = AccentGold)
                         },
@@ -154,6 +154,13 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    Text(
+                        text = "Configurações rápidas por ambiente:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     // Preset Quick URLs
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -161,26 +168,35 @@ fun SettingsScreen(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                tempUrl = "http://10.0.2.2:8000"
-                                onUpdateBackendUrl("http://10.0.2.2:8000")
+                                tempUrl = "http://10.0.2.2:8001"
+                                onUpdateBackendUrl("http://10.0.2.2:8001")
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Emulador (10.0.2.2)", fontSize = 11.sp, color = AccentGold)
+                            Text("Emulador (10.0.2.2:8001)", fontSize = 10.sp, color = AccentGold)
                         }
 
                         OutlinedButton(
                             onClick = {
-                                tempUrl = "http://localhost:8000"
-                                onUpdateBackendUrl("http://localhost:8000")
+                                tempUrl = "http://localhost:8001"
+                                onUpdateBackendUrl("http://localhost:8001")
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Local (localhost)", fontSize = 11.sp, color = PrimaryPurpleLight)
+                            Text("Localhost (8001)", fontSize = 10.sp, color = PrimaryPurpleLight)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "• Celular físico: use o IP local do seu computador na mesma rede Wi-Fi (ex: http://192.168.1.100:8001)\n• Servidor remoto: use a URL HTTPS pública configurada (ex: https://meu-backend.com)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -212,14 +228,15 @@ fun SettingsScreen(
                                 onClick = onTestBackend,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(40.dp),
+                                    .height(40.dp)
+                                    .testTag("test_connection_button"),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AccentGold,
                                     contentColor = DarkBackground
                                 )
                             ) {
-                                Text("Testar Conexão com o Servidor", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Testar conexão", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }

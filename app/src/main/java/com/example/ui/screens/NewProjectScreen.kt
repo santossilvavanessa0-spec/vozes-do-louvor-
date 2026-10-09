@@ -147,7 +147,7 @@ fun NewProjectScreen(
         }
     }
 
-    // When audio is successfully loaded, auto-fill ID3 metadata if fields are empty
+    // When audio is successfully loaded, auto-fill ID3 metadata and detected musical key
     LaunchedEffect(audioLoadState) {
         if (audioLoadState is AudioLoadState.Success) {
             val info = audioLoadState.audioInfo
@@ -158,6 +158,10 @@ fun NewProjectScreen(
             }
             if (artistName.isBlank() && !info.detectedArtist.isNullOrBlank()) {
                 artistName = info.detectedArtist
+            }
+            // Automatically set detected musical key
+            info.detectedKey?.let { detected ->
+                selectedKey = detected.rootKey
             }
         }
     }
@@ -461,6 +465,64 @@ fun NewProjectScreen(
                                 }
                             }
 
+                            // Automatic Musical Key Identification Banner
+                            info.detectedKey?.let { detected ->
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(AccentGold.copy(alpha = 0.12f))
+                                        .border(1.dp, AccentGold.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = AccentGold,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text(
+                                                    text = "Tom Detectado Automaticamente",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = TextMuted
+                                                )
+                                                Text(
+                                                    text = detected.fullKeyName,
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                                    color = AccentGold
+                                                )
+                                            }
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(DarkSurfaceElevated)
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = "${detected.confidence}% precisão",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = SuccessGreen,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(14.dp))
 
                             // Integrated Pre-Listening Audio Player
@@ -711,28 +773,46 @@ fun NewProjectScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                        text = "Tom Original da Música",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = TextSecondary
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Tom Original da Música",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = TextSecondary
+                        )
+                        val detectedKeyObj = (audioLoadState as? AudioLoadState.Success)?.audioInfo?.detectedKey
+                        if (detectedKeyObj != null) {
+                            Text(
+                                text = "Detectado pela IA: ${detectedKeyObj.rootKey} ★",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = AccentGold
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    val detectedKeyObj = (audioLoadState as? AudioLoadState.Success)?.audioInfo?.detectedKey
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         keysList.forEach { key ->
+                            val isDetected = key == detectedKeyObj?.rootKey
                             FilterChip(
                                 selected = selectedKey == key,
                                 onClick = { selectedKey = key },
-                                label = { Text(key) },
+                                label = {
+                                    Text(if (isDetected) "$key ★" else key)
+                                },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = AccentGold,
                                     selectedLabelColor = DarkBackground,
-                                    containerColor = DarkSurfaceElevated,
-                                    labelColor = TextSecondary
+                                    containerColor = if (isDetected) AccentGold.copy(alpha = 0.15f) else DarkSurfaceElevated,
+                                    labelColor = if (isDetected) AccentGold else TextSecondary
                                 ),
                                 shape = RoundedCornerShape(8.dp)
                             )

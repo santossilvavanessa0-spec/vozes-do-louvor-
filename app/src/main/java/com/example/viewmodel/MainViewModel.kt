@@ -83,11 +83,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiEvents = MutableSharedFlow<UiEvent>()
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
-    // Settings State: Default to standard emulator host alias or local host
-    val backendApiUrl = MutableStateFlow("http://10.0.2.2:8000")
+    // Configurable Backend API URL (Default: http://10.0.2.2:8001 for emulator, http://localhost:8001 for local)
+    val backendApiUrl = MutableStateFlow("http://10.0.2.2:8001")
     val apiKey = MutableStateFlow("")
     val preferredFormat = MutableStateFlow("WAV (Fidelidade Máxima)")
-    val backendStatus = MutableStateFlow("Não testado")
+    val backendStatus = MutableStateFlow("Verificando servidor...")
 
     private var processingJob: Job? = null
     private var audioLoadJob: Job? = null
@@ -95,6 +95,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             repository.seedInitialDataIfEmpty()
+            autoDetectBackend()
+        }
+    }
+
+    private suspend fun autoDetectBackend() {
+        val active = SeparationApiClient.discoverActiveServer(backendApiUrl.value)
+        if (active != null) {
+            backendApiUrl.value = active
+            backendStatus.value = "Conectado ($active)"
+        } else {
+            backendStatus.value = "Inacessível em ${backendApiUrl.value}"
         }
     }
 
@@ -110,16 +121,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun testBackendConnection() {
         viewModelScope.launch {
-            backendStatus.value = "Testando conexão..."
+            backendStatus.value = "Testando conexão com ${backendApiUrl.value}..."
             val result = SeparationApiClient.checkHealth(backendApiUrl.value)
             result.fold(
                 onSuccess = { health ->
-                    backendStatus.value = "Online (Demucs: ${if (health.demucsAvailable) "Disponível" else "Aguardando modelo"}, Dispositivo: ${health.device})"
-                    emitToast("Conexão com servidor Demucs estabelecida com sucesso!")
+                    backendStatus.value = "Conectado (${health.service ?: "Demucs AI"}, Porta ${health.port})"
+                    emitToast("Servidor Demucs conectado com sucesso!")
                 },
                 onFailure = { error ->
-                    backendStatus.value = "Inacessível (${error.localizedMessage})"
-                    emitToast("Falha ao conectar: ${error.localizedMessage}")
+                    val discovered = SeparationApiClient.discoverActiveServer(backendApiUrl.value)
+                    if (discovered != null) {
+                        backendApiUrl.value = discovered
+                        backendStatus.value = "Conectado ($discovered)"
+                        emitToast("Servidor Demucs localizado em $discovered!")
+                    } else {
+                        backendStatus.value = "Inacessível (${error.localizedMessage})"
+                        emitToast("Não foi possível conectar: ${error.localizedMessage}")
+                    }
                 }
             )
         }
@@ -199,7 +217,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _processingState.value = ProcessingUiState(
             progress = 0.05f,
             currentStep = 1,
-            stepTitle = "Verificando Servidor de IA Demucs",
+            stepTitle = "Verificando Servidor Demucs",
             stepDescription = "Conectando ao backend em ${backendApiUrl.value}...",
             songTitle = title,
             artist = artist.ifBlank { "Ministério de Louvor" },
@@ -209,7 +227,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         processingJob = viewModelScope.launch {
             try {
-                // Step 1: Health check
+                // Check if configured server is active, or discover available port
+                var targetUrl = backendApiUrl.value
+                val healthCheck = SeparationApiClient.checkHealth(targetUrl)
+                if (healthCheck.isFailure) {
+                    val discovered = SeparationApiClient.discoverActiveServer(targetUrl)
+                    if (discovered != null) {
+                        targetUrl = discovered
+                        backendApiUrl.value = discovered
+                        backendStatus.value = "Conectado ($discovered)"
+                    } else {
+                        throw SeparationServerException(
+                            "Servidor Demucs não encontrado em '${targetUrl}'. " +
+                            "Certifique-se de que o backend está ativo ou configure o IP correto em Ajustes."
+                        )
+                    }
+                }
+
+                // Step 1: Upload
                 _processingState.value = _processingState.value.copy(
                     progress = 0.15f,
                     currentStep = 1,
@@ -217,7 +252,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     stepDescription = "Fazendo upload de '${loadedAudioFile.name}' (${AudioFileManager.formatBytes(loadedAudioFile.length())})..."
                 )
 
-                // Step 2: Demucs Processing on Backend
+                // Step 2: Demucs Processing
                 _processingState.value = _processingState.value.copy(
                     progress = 0.40f,
                     currentStep = 2,
@@ -234,7 +269,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 val newProjectId = repository.separateWithBackend(
-                    backendUrl = backendApiUrl.value,
+                    backendUrl = targetUrl,
                     sourceAudioFile = loadedAudioFile,
                     title = title,
                     artist = artist.ifBlank { "Ministério de Louvor" },
@@ -257,7 +292,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _processingState.value = _processingState.value.copy(
                     isError = true,
                     errorMessage = e.message ?: "Falha na comunicação com o servidor de IA",
-                    errorSuggestion = "Certifique-se de que o backend Docker está executando em '${backendApiUrl.value}'. Você pode alterar o endereço IP em Ajustes."
+                    errorSuggestion = "Certifique-se de que o backend está executando. Se estiver usando emulador, use http://10.0.2.2:8001. Em celular físico, use o IP local do seu computador na mesma rede Wi-Fi."
                 )
             } catch (e: Exception) {
                 _processingState.value = _processingState.value.copy(

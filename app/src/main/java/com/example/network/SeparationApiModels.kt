@@ -10,6 +10,7 @@ data class HealthResponse(
     @Json(name = "demucs_available") val demucsAvailable: Boolean = false,
     @Json(name = "torch_available") val torchAvailable: Boolean = false,
     val device: String = "cpu",
+    val port: Int? = null,
     @Json(name = "supported_models") val supportedModels: List<String> = emptyList()
 )
 

@@ -20,7 +20,8 @@ data class LoadedAudioInfo(
     val formattedDuration: String,
     val mimeType: String?,
     val detectedTitle: String?,
-    val detectedArtist: String?
+    val detectedArtist: String?,
+    val detectedKey: KeyDetectionResult? = null
 )
 
 sealed class AudioLoadState {
@@ -171,6 +172,9 @@ object AudioFileManager {
                 } catch (_: Exception) {}
             }
 
+            onProgress(0.94f, "Identificando tom da música automaticamente...")
+            val detectedKey = MusicalKeyDetector.detectKey(targetFile, displayName)
+
             onProgress(1.0f, "Música carregada com sucesso!")
 
             val info = LoadedAudioInfo(
@@ -182,7 +186,8 @@ object AudioFileManager {
                 formattedDuration = formatTime(durationMs),
                 mimeType = mimeType ?: "audio/$extension",
                 detectedTitle = detectedTitle?.takeIf { it.isNotBlank() },
-                detectedArtist = detectedArtist?.takeIf { it.isNotBlank() }
+                detectedArtist = detectedArtist?.takeIf { it.isNotBlank() },
+                detectedKey = detectedKey
             )
 
             Result.success(info)
