@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Vozes do Louvor AI</string>
+    <string name="tagline">Prepare seu louvor. Aprenda sua voz. Adore com excelência.</string>
+    <string name="nav_home">Início</string>
+    <string name="nav_new_project">Novo Projeto</string>
+    <string name="nav_my_praises">Meus Louvores</string>
+    <string name="nav_settings">Configurações</string>
+</resources>

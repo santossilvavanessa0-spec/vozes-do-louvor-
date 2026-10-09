@@ -1,0 +1,6 @@
+{
+  "name": "Vozes do Louvor AI",
+  "description": "Separação inteligente de naipes vocais (Soprano, Contralto, Tenor, Baixo) e instrumental para ensaios de ministérios de louvor e corais.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
