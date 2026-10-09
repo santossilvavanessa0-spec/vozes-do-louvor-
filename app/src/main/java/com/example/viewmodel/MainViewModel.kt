@@ -1,19 +1,21 @@
 package com.example.viewmodel
 
 import android.app.Application
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.audio.AudioFileManager
+import com.example.audio.AudioLoadState
+import com.example.audio.LoadedAudioInfo
 import com.example.audio.MultiTrackAudioPlayer
+import com.example.audio.PreviewAudioPlayer
 import com.example.data.local.PraiseDatabase
 import com.example.data.model.PraiseProject
 import com.example.data.model.ProjectWithStems
 import com.example.data.model.StemTrack
-import com.example.data.model.StemType
 import com.example.data.repository.PraiseRepository
+import com.example.data.repository.SeparationServerException
+import com.example.network.SeparationApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,9 +44,12 @@ data class ProcessingUiState(
     val progress: Float = 0f,
     val currentStep: Int = 1,
     val stepTitle: String = "Iniciando processamento...",
-    val stepDescription: String = "Preparando buffers de áudio",
+    val stepDescription: String = "Preparando conexão com o servidor de IA",
     val songTitle: String = "",
-    val artist: String = ""
+    val artist: String = "",
+    val isError: Boolean = false,
+    val errorMessage: String = "",
+    val errorSuggestion: String = ""
 )
 
 sealed class UiEvent {
@@ -58,6 +63,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = PraiseRepository(application, database.praiseDao())
 
     val audioPlayer = MultiTrackAudioPlayer(application, viewModelScope)
+    val previewPlayer = PreviewAudioPlayer(application, viewModelScope)
 
     val projects: StateFlow<List<PraiseProject>> = repository.allProjects
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -71,16 +77,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _processingState = MutableStateFlow(ProcessingUiState())
     val processingState: StateFlow<ProcessingUiState> = _processingState.asStateFlow()
 
+    private val _audioLoadState = MutableStateFlow<AudioLoadState>(AudioLoadState.Idle)
+    val audioLoadState: StateFlow<AudioLoadState> = _audioLoadState.asStateFlow()
+
     private val _uiEvents = MutableSharedFlow<UiEvent>()
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
-    // Settings State
-    val backendApiUrl = MutableStateFlow("http://localhost:8000")
+    // Settings State: Default to standard emulator host alias or local host
+    val backendApiUrl = MutableStateFlow("http://10.0.2.2:8000")
     val apiKey = MutableStateFlow("")
     val preferredFormat = MutableStateFlow("WAV (Fidelidade Máxima)")
-    val isDemoMode = MutableStateFlow(true)
+    val backendStatus = MutableStateFlow("Não testado")
 
     private var processingJob: Job? = null
+    private var audioLoadJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -92,10 +102,67 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (screen != Screen.RESULT_STUDIO) {
             audioPlayer.pause()
         }
+        if (screen != Screen.NEW_PROJECT) {
+            previewPlayer.pause()
+        }
         _currentScreen.value = screen
     }
 
+    fun testBackendConnection() {
+        viewModelScope.launch {
+            backendStatus.value = "Testando conexão..."
+            val result = SeparationApiClient.checkHealth(backendApiUrl.value)
+            result.fold(
+                onSuccess = { health ->
+                    backendStatus.value = "Online (Demucs: ${if (health.demucsAvailable) "Disponível" else "Aguardando modelo"}, Dispositivo: ${health.device})"
+                    emitToast("Conexão com servidor Demucs estabelecida com sucesso!")
+                },
+                onFailure = { error ->
+                    backendStatus.value = "Inacessível (${error.localizedMessage})"
+                    emitToast("Falha ao conectar: ${error.localizedMessage}")
+                }
+            )
+        }
+    }
+
+    fun loadAudioFromUri(uri: Uri) {
+        audioLoadJob?.cancel()
+        previewPlayer.release()
+        _audioLoadState.value = AudioLoadState.Loading(0.05f, "Iniciando leitura do arquivo...")
+
+        audioLoadJob = viewModelScope.launch {
+            val result = AudioFileManager.copyAndValidateAudio(
+                context = getApplication(),
+                uri = uri,
+                onProgress = { fraction, msg ->
+                    _audioLoadState.value = AudioLoadState.Loading(fraction, msg)
+                }
+            )
+
+            result.fold(
+                onSuccess = { info ->
+                    _audioLoadState.value = AudioLoadState.Success(info)
+                    previewPlayer.loadAudio(info.file)
+                    emitToast("Música carregada: ${info.fileName}")
+                },
+                onFailure = { error ->
+                    _audioLoadState.value = AudioLoadState.Error(
+                        errorMessage = error.localizedMessage ?: "Erro desconhecido ao carregar áudio",
+                        suggestion = "Verifique se o arquivo está acessível e nos formatos MP3, WAV, M4A, AAC ou FLAC."
+                    )
+                }
+            )
+        }
+    }
+
+    fun resetAudioLoad() {
+        audioLoadJob?.cancel()
+        previewPlayer.release()
+        _audioLoadState.value = AudioLoadState.Idle
+    }
+
     fun openProjectInStudio(projectId: Long) {
+        previewPlayer.pause()
         viewModelScope.launch {
             repository.getProjectWithStems(projectId).collect { projectWithStems ->
                 if (projectWithStems != null) {
@@ -113,54 +180,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         musicalKey: String,
         notes: String,
         modelName: String,
-        audioFormat: String
+        audioFormat: String,
+        loadedAudioFile: File?,
+        durationSeconds: Int
     ) {
         if (title.isBlank()) {
             emitToast("Por favor, informe o nome do louvor")
             return
         }
 
+        if (loadedAudioFile == null || !loadedAudioFile.exists()) {
+            emitToast("Por favor, envie ou selecione uma música antes de separar as vozes")
+            return
+        }
+
+        previewPlayer.pause()
+
         _processingState.value = ProcessingUiState(
             progress = 0.05f,
             currentStep = 1,
-            stepTitle = "Decodificando Áudio do Louvor",
-            stepDescription = "Lendo frequências espectrais e metadados",
+            stepTitle = "Verificando Servidor de IA Demucs",
+            stepDescription = "Conectando ao backend em ${backendApiUrl.value}...",
             songTitle = title,
-            artist = artist.ifBlank { "Ministério de Louvor" }
+            artist = artist.ifBlank { "Ministério de Louvor" },
+            isError = false
         )
         _currentScreen.value = Screen.PROCESSING
 
         processingJob = viewModelScope.launch {
             try {
-                // Step 1: Decode
-                delay(900)
+                // Step 1: Health check
                 _processingState.value = _processingState.value.copy(
-                    progress = 0.28f,
+                    progress = 0.15f,
+                    currentStep = 1,
+                    stepTitle = "Enviando Áudio para o Servidor",
+                    stepDescription = "Fazendo upload de '${loadedAudioFile.name}' (${AudioFileManager.formatBytes(loadedAudioFile.length())})..."
+                )
+
+                // Step 2: Demucs Processing on Backend
+                _processingState.value = _processingState.value.copy(
+                    progress = 0.40f,
                     currentStep = 2,
-                    stepTitle = "Demucs AI: Isolamento de Fontes",
-                    stepDescription = "Separando instrumental da faixa vocal principal"
+                    stepTitle = "Demucs v4: Isolando Fontes Musicais",
+                    stepDescription = "Separando instrumental da faixa vocal original..."
                 )
 
-                // Step 2: Demucs separation
-                delay(1200)
+                // Step 3: Vocal Tessituras
                 _processingState.value = _processingState.value.copy(
-                    progress = 0.55f,
+                    progress = 0.70f,
                     currentStep = 3,
-                    stepTitle = "IA Coral: Análise de Naipes Vocais",
-                    stepDescription = "Desentrelaçando formantes de Soprano, Contralto, Tenor e Baixo"
+                    stepTitle = "IA Coral: Decomposição de Naipes",
+                    stepDescription = "Isolando Soprano (agudo), Contralto (médio) e Tenor (masculino)..."
                 )
 
-                // Step 3: Vocal Stems formant disentanglement
-                delay(1300)
-                _processingState.value = _processingState.value.copy(
-                    progress = 0.85f,
-                    currentStep = 4,
-                    stepTitle = "Renderização e Equalização",
-                    stepDescription = "Gerando faixas independentes e equalização de ensaio"
-                )
-
-                // Step 4: Real WAV stems creation and persistence
-                val newProjectId = repository.createProjectWithStems(
+                val newProjectId = repository.separateWithBackend(
+                    backendUrl = backendApiUrl.value,
+                    sourceAudioFile = loadedAudioFile,
                     title = title,
                     artist = artist.ifBlank { "Ministério de Louvor" },
                     musicalKey = musicalKey,
@@ -169,19 +244,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     audioFormat = audioFormat
                 )
 
-                delay(600)
                 _processingState.value = _processingState.value.copy(
                     progress = 1.0f,
                     currentStep = 4,
-                    stepTitle = "Processamento Concluído!",
-                    stepDescription = "Suas faixas estão prontas no Estúdio"
+                    stepTitle = "Separação Concluída com Sucesso!",
+                    stepDescription = "Faixas reais baixadas e sincronizadas no Estúdio"
                 )
 
-                delay(500)
+                delay(600)
                 openProjectInStudio(newProjectId)
+            } catch (e: SeparationServerException) {
+                _processingState.value = _processingState.value.copy(
+                    isError = true,
+                    errorMessage = e.message ?: "Falha na comunicação com o servidor de IA",
+                    errorSuggestion = "Certifique-se de que o backend Docker está executando em '${backendApiUrl.value}'. Você pode alterar o endereço IP em Ajustes."
+                )
             } catch (e: Exception) {
-                emitToast("Erro durante o processamento: ${e.localizedMessage}")
-                _currentScreen.value = Screen.NEW_PROJECT
+                _processingState.value = _processingState.value.copy(
+                    isError = true,
+                    errorMessage = e.localizedMessage ?: "Erro inesperado durante a separação",
+                    errorSuggestion = "Verifique o arquivo original e tente novamente."
+                )
             }
         }
     }
@@ -207,7 +290,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun exportSingleStem(stem: StemTrack, songTitle: String) {
         viewModelScope.launch {
             val file = File(stem.audioFilePath)
-            if (file.exists()) {
+            if (file.exists() && file.length() > 0) {
                 val safeTitle = songTitle.replace(Regex("[^a-zA-Z0-9_-]"), "_")
                 val safeStem = stem.title.replace(" ", "_")
                 val exportDir = File(getApplication<Application>().cacheDir, "exports")
@@ -251,5 +334,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         audioPlayer.release()
+        previewPlayer.release()
     }
 }

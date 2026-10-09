@@ -22,27 +22,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -76,11 +69,11 @@ fun SettingsScreen(
     backendUrl: String,
     apiKey: String,
     preferredFormat: String,
-    isDemoMode: Boolean,
+    backendStatus: String,
     onUpdateBackendUrl: (String) -> Unit,
     onUpdateApiKey: (String) -> Unit,
     onUpdatePreferredFormat: (String) -> Unit,
-    onToggleDemoMode: (Boolean) -> Unit
+    onTestBackend: () -> Unit
 ) {
     var tempUrl by remember { mutableStateOf(backendUrl) }
     var tempKey by remember { mutableStateOf(apiKey) }
@@ -97,72 +90,138 @@ fun SettingsScreen(
         item {
             Column {
                 Text(
-                    text = "Configurações & Backend AI",
+                    text = "Configurações do Servidor de IA",
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Gerencie o motor de IA Demucs, formatos e servidores de processamento.",
+                    text = "Configure o backend Demucs v4 para processamento real dos arquivos de louvor.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary
                 )
             }
         }
 
-        // Active Mode Status Card
+        // Section: Demucs FastAPI Server Backend
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = Brush.linearGradient(
-                        if (isDemoMode) listOf(AccentGold, PrimaryPurple)
-                        else listOf(SuccessGreen, PrimaryPurple)
-                    )
+                    brush = Brush.linearGradient(listOf(DarkSurfaceBorder, DarkSurfaceBorder))
                 )
             ) {
-                Row(
-                    modifier = Modifier.padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "Endereço do Servidor Demucs (FastAPI)",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "O modelo de IA roda em um backend seguro para não sobrecarregar o dispositivo móvel.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = tempUrl,
+                        onValueChange = {
+                            tempUrl = it
+                            onUpdateBackendUrl(it)
+                        },
+                        label = { Text("URL do Backend") },
+                        placeholder = { Text("http://10.0.2.2:8000 ou IP do seu PC") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Dns, contentDescription = null, tint = AccentGold)
+                        },
                         modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isDemoMode) AccentGold.copy(alpha = 0.2f)
-                                else SuccessGreen.copy(alpha = 0.2f)
-                            ),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .testTag("input_backend_url"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentGold,
+                            unfocusedBorderColor = DarkSurfaceBorder,
+                            focusedLabelColor = AccentGold,
+                            unfocusedLabelColor = TextMuted
+                        ),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Preset Quick URLs
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isDemoMode) Icons.Default.Info else Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = if (isDemoMode) AccentGold else SuccessGreen,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        OutlinedButton(
+                            onClick = {
+                                tempUrl = "http://10.0.2.2:8000"
+                                onUpdateBackendUrl("http://10.0.2.2:8000")
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Emulador (10.0.2.2)", fontSize = 11.sp, color = AccentGold)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                tempUrl = "http://localhost:8000"
+                                onUpdateBackendUrl("http://localhost:8000")
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Local (localhost)", fontSize = 11.sp, color = PrimaryPurpleLight)
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isDemoMode) "Modo Demonstração Ativo" else "Conectado ao Backend Demucs",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (isDemoMode)
-                                "Gera faixas e síntese harmônica de ensaio no próprio celular para uso imediato sem custos de servidor."
-                            else
-                                "Enviando arquivos para o servidor FastAPI Demucs para separação neural em nuvem.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                            lineHeight = 16.sp
-                        )
+                    // Status and Test Connection Button
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(DarkSurfaceElevated)
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.NetworkCheck,
+                                    contentDescription = null,
+                                    tint = AccentGold,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Status: $backendStatus",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (backendStatus.contains("Online")) SuccessGreen else TextSecondary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = onTestBackend,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = AccentGold,
+                                    contentColor = DarkBackground
+                                )
+                            ) {
+                                Text("Testar Conexão com o Servidor", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -180,16 +239,15 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Preferências de Exportação de Áudio",
+                        text = "Formato de Exportação dos Naipes",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(10.dp))
 
                     val formats = listOf(
-                        "WAV (Fidelidade Máxima)",
-                        "MP3 (320 kbps)",
-                        "FLAC (Lossless)"
+                        "WAV (Fidelidade Máxima - Sem Perdas)",
+                        "MP3 (320 kbps)"
                     )
 
                     formats.forEach { fmt ->
@@ -215,106 +273,6 @@ fun SettingsScreen(
                                 )
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        // Section: Demucs FastAPI Server Backend
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = CardDefaults.outlinedCardBorder().copy(
-                    brush = Brush.linearGradient(listOf(DarkSurfaceBorder, DarkSurfaceBorder))
-                )
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "Servidor de Separação de Áudio (Demucs / FastAPI)",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Se você possui um servidor ou container Docker executando o modelo Demucs, configure o endpoint abaixo:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    OutlinedTextField(
-                        value = tempUrl,
-                        onValueChange = {
-                            tempUrl = it
-                            onUpdateBackendUrl(it)
-                        },
-                        label = { Text("URL da API FastAPI") },
-                        placeholder = { Text("http://seu-servidor:8000") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Dns, contentDescription = null, tint = AccentGold)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_backend_url"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentGold,
-                            unfocusedBorderColor = DarkSurfaceBorder,
-                            focusedLabelColor = AccentGold,
-                            unfocusedLabelColor = TextMuted
-                        ),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = tempKey,
-                        onValueChange = {
-                            tempKey = it
-                            onUpdateApiKey(it)
-                        },
-                        label = { Text("Chave de API / Token (Opcional)") },
-                        placeholder = { Text("Bearer token ou API Key") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Key, contentDescription = null, tint = AccentGold)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_api_key"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentGold,
-                            unfocusedBorderColor = DarkSurfaceBorder,
-                            focusedLabelColor = AccentGold,
-                            unfocusedLabelColor = TextMuted
-                        ),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Usar Modo Demonstração Local",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary
-                        )
-                        Switch(
-                            checked = isDemoMode,
-                            onCheckedChange = onToggleDemoMode,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = DarkBackground,
-                                checkedTrackColor = AccentGold
-                            )
-                        )
                     }
                 }
             }
@@ -347,7 +305,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Como Rodar o Backend Demucs no Docker",
+                                text = "Como Iniciar o Backend no Docker",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = AccentGold
                             )
@@ -369,7 +327,7 @@ fun SettingsScreen(
                                 .padding(12.dp)
                         ) {
                             Text(
-                                text = "# 1. Clone o backend FastAPI\ngit clone https://github.com/adefossez/demucs\n\n# 2. Inicie o container com GPU/CPU\ndocker run -d -p 8000:8000 \\\n  -v ./audio_stems:/app/output \\\n  vozes-louvor-demucs:latest\n\n# 3. Endpoint da API:\nPOST /api/separate-stems\nForm: file=[audio.mp3], model=htdemucs_ft",
+                                text = "# Acesse a pasta backend do projeto:\ncd backend\n\n# Inicie o container com Demucs v4 e FastAPI:\ndocker compose up -d --build\n\n# Pronto! O servidor estará ouvindo em:\nhttp://localhost:8000\n(ou http://10.0.2.2:8000 no emulador Android)",
                                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                                 color = AccentGold,
                                 fontSize = 11.sp,
@@ -401,14 +359,14 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Vozes do Louvor AI v1.0",
+                            text = "Vozes do Louvor AI",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = TextPrimary
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Desenvolvido com carinho para ministérios de música, igrejas e corais cristãos aperfeiçoarem o louvor a Deus com excelência e dedicação.",
+                        text = "Separação inteligente de naipes vocais (Soprano, Contralto e Tenor) com preservação da voz cantada real e integridade harmônica.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                         lineHeight = 18.sp

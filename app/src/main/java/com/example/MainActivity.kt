@@ -47,12 +47,14 @@ class MainActivity : ComponentActivity() {
                 val projects by viewModel.projects.collectAsStateWithLifecycle()
                 val selectedProjectWithStems by viewModel.selectedProjectWithStems.collectAsStateWithLifecycle()
                 val playerState by viewModel.audioPlayer.uiState.collectAsStateWithLifecycle()
+                val previewPlayerState by viewModel.previewPlayer.state.collectAsStateWithLifecycle()
                 val processingState by viewModel.processingState.collectAsStateWithLifecycle()
+                val audioLoadState by viewModel.audioLoadState.collectAsStateWithLifecycle()
 
                 val backendUrl by viewModel.backendApiUrl.collectAsStateWithLifecycle()
                 val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
                 val preferredFormat by viewModel.preferredFormat.collectAsStateWithLifecycle()
-                val isDemoMode by viewModel.isDemoMode.collectAsStateWithLifecycle()
+                val backendStatus by viewModel.backendStatus.collectAsStateWithLifecycle()
 
                 // Listen to UI Events (Toast & Share)
                 LaunchedEffect(Unit) {
@@ -108,7 +110,7 @@ class MainActivity : ComponentActivity() {
                         val title = when (currentScreen) {
                             Screen.HOME -> "Vozes do Louvor AI"
                             Screen.NEW_PROJECT -> "Novo Louvor"
-                            Screen.PROCESSING -> "Processando IA"
+                            Screen.PROCESSING -> "Processando com Demucs"
                             Screen.RESULT_STUDIO -> "Estúdio de Ensaio"
                             Screen.MY_PRAISES -> "Meus Louvores"
                             Screen.SETTINGS -> "Configurações"
@@ -149,15 +151,34 @@ class MainActivity : ComponentActivity() {
                             }
                             Screen.NEW_PROJECT -> {
                                 NewProjectScreen(
-                                    onStartSeparation = { title, artist, key, notes, model, format ->
-                                        viewModel.startSeparation(title, artist, key, notes, model, format)
+                                    audioLoadState = audioLoadState,
+                                    previewPlayer = viewModel.previewPlayer,
+                                    previewPlayerState = previewPlayerState,
+                                    onSelectAudioUri = { viewModel.loadAudioFromUri(it) },
+                                    onResetAudioLoad = { viewModel.resetAudioLoad() },
+                                    onSelectSample = { title, artist, key, notes ->
+                                        // When selecting sample, inform user
+                                        viewModel.resetAudioLoad()
+                                    },
+                                    onStartSeparation = { title, artist, key, notes, model, format, file, duration ->
+                                        viewModel.startSeparation(
+                                            title = title,
+                                            artist = artist,
+                                            musicalKey = key,
+                                            notes = notes,
+                                            modelName = model,
+                                            audioFormat = format,
+                                            loadedAudioFile = file,
+                                            durationSeconds = duration
+                                        )
                                     }
                                 )
                             }
                             Screen.PROCESSING -> {
                                 ProcessingScreen(
                                     state = processingState,
-                                    onCancel = { viewModel.cancelProcessing() }
+                                    onCancel = { viewModel.cancelProcessing() },
+                                    onNavigateToSettings = { viewModel.navigateTo(Screen.SETTINGS) }
                                 )
                             }
                             Screen.RESULT_STUDIO -> {
@@ -189,11 +210,11 @@ class MainActivity : ComponentActivity() {
                                     backendUrl = backendUrl,
                                     apiKey = apiKey,
                                     preferredFormat = preferredFormat,
-                                    isDemoMode = isDemoMode,
+                                    backendStatus = backendStatus,
                                     onUpdateBackendUrl = { viewModel.backendApiUrl.value = it },
                                     onUpdateApiKey = { viewModel.apiKey.value = it },
                                     onUpdatePreferredFormat = { viewModel.preferredFormat.value = it },
-                                    onToggleDemoMode = { viewModel.isDemoMode.value = it }
+                                    onTestBackend = { viewModel.testBackendConnection() }
                                 )
                             }
                         }

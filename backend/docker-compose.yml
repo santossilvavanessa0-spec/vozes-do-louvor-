@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  demucs-api:
+    build: .
+    container_name: vozes-do-louvor-demucs
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - STORAGE_DIR=/app/storage
+    volumes:
+      - ./storage:/app/storage
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

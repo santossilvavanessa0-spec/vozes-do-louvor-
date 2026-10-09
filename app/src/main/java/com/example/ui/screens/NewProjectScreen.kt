@@ -27,10 +27,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,14 +43,21 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,17 +66,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.audio.AudioLoadState
+import com.example.audio.LoadedAudioInfo
+import com.example.audio.PreviewAudioPlayer
+import com.example.audio.PreviewPlayerState
 import com.example.ui.theme.AccentGold
 import com.example.ui.theme.AccentGoldDark
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.DarkSurface
 import com.example.ui.theme.DarkSurfaceBorder
 import com.example.ui.theme.DarkSurfaceElevated
+import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.PrimaryPurple
 import com.example.ui.theme.PrimaryPurpleLight
 import com.example.ui.theme.StemBaixo
@@ -73,10 +91,12 @@ import com.example.ui.theme.StemInstrumental
 import com.example.ui.theme.StemSoprano
 import com.example.ui.theme.StemTenor
 import com.example.ui.theme.StemVocalFull
+import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import com.example.ui.theme.WarningOrange
+import java.io.File
+import java.util.Locale
 
 data class PraisePreset(
     val title: String,
@@ -88,25 +108,27 @@ data class PraisePreset(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NewProjectScreen(
+    audioLoadState: AudioLoadState,
+    previewPlayer: PreviewAudioPlayer,
+    previewPlayerState: PreviewPlayerState,
+    onSelectAudioUri: (Uri) -> Unit,
+    onResetAudioLoad: () -> Unit,
+    onSelectSample: (title: String, artist: String, key: String, notes: String) -> Unit,
     onStartSeparation: (
         title: String,
         artist: String,
         musicalKey: String,
         notes: String,
         modelName: String,
-        audioFormat: String
+        audioFormat: String,
+        loadedFile: File?,
+        durationSeconds: Int
     ) -> Unit
 ) {
     var songTitle by remember { mutableStateOf("") }
     var artistName by remember { mutableStateOf("") }
     var selectedKey by remember { mutableStateOf("G") }
     var rehearsalNotes by remember { mutableStateOf("") }
-    var selectedFileName by remember { mutableStateOf<String?>(null) }
-    var selectedAudioUri by remember { mutableStateOf<Uri?>(null) }
-
-    // Models & format
-    var selectedModel by remember { mutableStateOf("Demucs v4 Hybrid AI (Naipes Vocais)") }
-    var selectedFormat by remember { mutableStateOf("WAV (Alta Fidelidade)") }
 
     // Stems selection
     var includeSoprano by remember { mutableStateOf(true) }
@@ -116,12 +138,27 @@ fun NewProjectScreen(
     var includeInstrumental by remember { mutableStateOf(true) }
     var includeFullVocal by remember { mutableStateOf(true) }
 
+    // Launcher for selecting audio from device / Google Drive
     val audioPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
-            selectedAudioUri = uri
-            selectedFileName = uri.lastPathSegment ?: "audio_louvor.mp3"
+            onSelectAudioUri(uri)
+        }
+    }
+
+    // When audio is successfully loaded, auto-fill ID3 metadata if fields are empty
+    LaunchedEffect(audioLoadState) {
+        if (audioLoadState is AudioLoadState.Success) {
+            val info = audioLoadState.audioInfo
+            if (songTitle.isBlank() && !info.detectedTitle.isNullOrBlank()) {
+                songTitle = info.detectedTitle
+            } else if (songTitle.isBlank()) {
+                songTitle = info.fileName.substringBeforeLast(".").replace("_", " ")
+            }
+            if (artistName.isBlank() && !info.detectedArtist.isNullOrBlank()) {
+                artistName = info.detectedArtist
+            }
         }
     }
 
@@ -148,6 +185,13 @@ fun NewProjectScreen(
         )
     )
 
+    fun formatMs(ms: Int): String {
+        val totalSec = ms / 1000
+        val min = totalSec / 60
+        val sec = totalSec % 60
+        return String.format(Locale.getDefault(), "%02d:%02d", min, sec)
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -159,97 +203,395 @@ fun NewProjectScreen(
         item {
             Column {
                 Text(
-                    text = "Novo Projeto de Louvor",
+                    text = "Carregar Louvor para Separação",
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Preencha os dados e envie o áudio para separação dos naipes.",
+                    text = "Envie uma música do seu celular ou do Google Drive para separar as vozes do coro.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary
                 )
             }
         }
 
-        // Section: File Upload Card
+        // Section: Audio Upload States Card
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { audioPickerLauncher.launch("audio/*") }
-                    .testTag("upload_audio_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = CardDefaults.outlinedCardBorder().copy(
-                    brush = Brush.linearGradient(
-                        if (selectedFileName != null) listOf(AccentGold, PrimaryPurple)
-                        else listOf(DarkSurfaceBorder, DarkSurfaceElevated)
-                    )
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
+            when (audioLoadState) {
+                is AudioLoadState.Idle -> {
+                    Card(
                         modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (selectedFileName != null) AccentGold.copy(alpha = 0.2f)
-                                else PrimaryPurple.copy(alpha = 0.2f)
-                            ),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .testTag("audio_selection_idle_card"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = Brush.linearGradient(listOf(DarkSurfaceBorder, DarkSurfaceElevated))
+                        )
                     ) {
-                        Icon(
-                            imageVector = if (selectedFileName != null) Icons.Default.Audiotrack else Icons.Default.CloudUpload,
-                            contentDescription = null,
-                            tint = if (selectedFileName != null) AccentGold else PrimaryPurpleLight,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(PrimaryPurple.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Audiotrack,
+                                    contentDescription = null,
+                                    tint = AccentGold,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Text(
+                                text = "Selecione o Áudio do Louvor",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Formatos suportados: MP3, WAV, M4A, AAC ou FLAC",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(18.dp))
+
+                            // Button 1: Enviar música do celular
+                            Button(
+                                onClick = {
+                                    audioPickerLauncher.launch(
+                                        arrayOf("audio/*", "audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/m4a", "audio/aac", "audio/flac")
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                                    .testTag("upload_from_device_button"),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = AccentGold,
+                                    contentColor = DarkBackground
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhoneAndroid,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Enviar música do celular",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Button 2: Selecionar do Google Drive / Arquivos
+                            OutlinedButton(
+                                onClick = {
+                                    audioPickerLauncher.launch(
+                                        arrayOf("audio/*", "audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/m4a", "audio/aac", "audio/flac")
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                                    .testTag("select_from_drive_button"),
+                                shape = RoundedCornerShape(14.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryPurpleLight)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Cloud,
+                                    contentDescription = null,
+                                    tint = PrimaryPurpleLight,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Selecionar do Google Drive / Arquivos",
+                                    color = PrimaryPurpleLight,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+                        }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                is AudioLoadState.Loading -> {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("audio_loading_progress_card"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = Brush.linearGradient(listOf(PrimaryPurple, AccentGold))
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { audioLoadState.progress },
+                                color = AccentGold,
+                                trackColor = DarkSurfaceBorder,
+                                modifier = Modifier.size(52.dp)
+                            )
 
-                    if (selectedFileName != null) {
-                        Text(
-                            text = "Arquivo selecionado:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AccentGold
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "Carregando e validando áudio...",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TextPrimary
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = audioLoadState.statusMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AccentGold,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            LinearProgressIndicator(
+                                progress = { audioLoadState.progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = AccentGold,
+                                trackColor = DarkSurface
+                            )
+                        }
+                    }
+                }
+
+                is AudioLoadState.Success -> {
+                    val info = audioLoadState.audioInfo
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("audio_loaded_success_card"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = Brush.linearGradient(listOf(SuccessGreen, AccentGold))
                         )
-                        Text(
-                            text = selectedFileName ?: "",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary,
-                            textAlign = TextAlign.Center
+                    ) {
+                        Column(modifier = Modifier.padding(18.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(SuccessGreen.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Audiotrack,
+                                            contentDescription = null,
+                                            tint = SuccessGreen,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = info.fileName,
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = TextPrimary,
+                                            maxLines = 1
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Tamanho: ${info.formattedSize}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = TextSecondary
+                                            )
+                                            Text(text = "•", color = TextMuted)
+                                            Text(
+                                                text = "Duração: ${info.formattedDuration}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = AccentGold
+                                            )
+                                        }
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = onResetAudioLoad,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Trocar música",
+                                        tint = TextMuted
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Integrated Pre-Listening Audio Player
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(DarkSurfaceElevated)
+                                    .padding(12.dp)
+                            ) {
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Pré-escuta do Louvor",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = AccentGold
+                                        )
+                                        Text(
+                                            text = "${formatMs(previewPlayerState.currentPositionMs)} / ${formatMs(previewPlayerState.durationMs)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextSecondary
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Slider(
+                                        value = previewPlayerState.currentPositionMs.toFloat(),
+                                        onValueChange = { previewPlayer.seekTo(it.toInt()) },
+                                        valueRange = 0f..previewPlayerState.durationMs.toFloat().coerceAtLeast(1f),
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = AccentGold,
+                                            activeTrackColor = AccentGold,
+                                            inactiveTrackColor = DarkSurfaceBorder
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Button(
+                                            onClick = { previewPlayer.togglePlayPause() },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = AccentGold,
+                                                contentColor = DarkBackground
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.height(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (previewPlayerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                contentDescription = if (previewPlayerState.isPlaying) "Pausar" else "Ouvir",
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (previewPlayerState.isPlaying) "Pausar" else "Ouvir Áudio",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                is AudioLoadState.Error -> {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("audio_load_error_card"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = Brush.linearGradient(listOf(ErrorRed, DarkSurfaceBorder))
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Toque para trocar o arquivo",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
-                    } else {
-                        Text(
-                            text = "Toque para enviar o áudio do louvor",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Formatos aceitos: MP3, WAV, M4A ou FLAC",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Tamanho recomendado: até 50 MB",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = ErrorRed,
+                                modifier = Modifier.size(44.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Não foi possível carregar o arquivo",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ErrorRed
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = audioLoadState.errorMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextPrimary,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = audioLoadState.suggestion,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Button(
+                                onClick = onResetAudioLoad,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentGold, contentColor = DarkBackground)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Tentar Novamente", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -259,7 +601,7 @@ fun NewProjectScreen(
         item {
             Column {
                 Text(
-                    text = "Ou escolha um louvor para teste imediato:",
+                    text = "Ou teste com um louvor de demonstração:",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = AccentGold
                 )
@@ -277,7 +619,7 @@ fun NewProjectScreen(
                                     artistName = preset.artist
                                     selectedKey = preset.key
                                     rehearsalNotes = preset.notes
-                                    selectedFileName = "${preset.title.replace(" ", "_")}.mp3"
+                                    onSelectSample(preset.title, preset.artist, preset.key, preset.notes)
                                 }
                                 .testTag("preset_${preset.title.take(5)}"),
                             shape = RoundedCornerShape(12.dp),
@@ -526,6 +868,9 @@ fun NewProjectScreen(
 
         // Section: Submit Action Button
         item {
+            val loadedFile = (audioLoadState as? AudioLoadState.Success)?.audioInfo?.file
+            val durationSec = ((audioLoadState as? AudioLoadState.Success)?.audioInfo?.durationMs?.div(1000)?.toInt()) ?: 18
+
             Button(
                 onClick = {
                     val finalTitle = songTitle.ifBlank { "Louvor Sem Título" }
@@ -535,8 +880,10 @@ fun NewProjectScreen(
                         finalArtist,
                         selectedKey,
                         rehearsalNotes,
-                        selectedModel,
-                        selectedFormat
+                        "Demucs v4 Hybrid AI (Naipes Vocais)",
+                        "WAV (Alta Fidelidade)",
+                        loadedFile,
+                        durationSec
                     )
                 },
                 modifier = Modifier
@@ -569,7 +916,7 @@ fun NewProjectScreen(
 private fun StemCheckboxItem(
     title: String,
     desc: String,
-    color: androidx.compose.ui.graphics.Color,
+    color: Color,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {

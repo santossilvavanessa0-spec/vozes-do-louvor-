@@ -24,15 +24,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,9 +57,9 @@ import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.DarkSurface
 import com.example.ui.theme.DarkSurfaceBorder
 import com.example.ui.theme.DarkSurfaceElevated
+import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.PrimaryPurple
 import com.example.ui.theme.PrimaryPurpleLight
-import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
@@ -69,8 +68,104 @@ import com.example.viewmodel.ProcessingUiState
 @Composable
 fun ProcessingScreen(
     state: ProcessingUiState,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onNavigateToSettings: () -> Unit = {}
 ) {
+    if (state.isError) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(DarkBackground)
+                .padding(24.dp)
+                .testTag("processing_error_screen"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(ErrorRed.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = null,
+                    tint = ErrorRed,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "Não foi possível separar as vozes",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = TextPrimary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = Brush.linearGradient(listOf(ErrorRed.copy(alpha = 0.5f), DarkSurfaceBorder))
+                )
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = state.errorMessage,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = ErrorRed
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = state.errorSuggestion,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onNavigateToSettings,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGold,
+                    contentColor = DarkBackground
+                )
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Configurar Servidor de IA", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Voltar ao Projeto", color = TextSecondary)
+            }
+        }
+        return
+    }
+
     val animatedProgress by animateFloatAsState(
         targetValue = state.progress,
         animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
@@ -130,7 +225,7 @@ fun ProcessingScreen(
         Spacer(modifier = Modifier.height(28.dp))
 
         Text(
-            text = "Separando Vozes com IA",
+            text = "Separando com IA Demucs",
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
             color = TextPrimary
         )
