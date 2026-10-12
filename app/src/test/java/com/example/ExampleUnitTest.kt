@@ -65,4 +65,18 @@ class ExampleUnitTest {
       tempFile.delete()
     }
   }
+
+  @Test
+  fun testStemTypes_hasSoloBackVocalAndNaipes() {
+    val types = com.example.data.model.StemType.values()
+    assertTrue(types.contains(com.example.data.model.StemType.SOLO))
+    assertTrue(types.contains(com.example.data.model.StemType.BACK_VOCAL))
+    assertTrue(types.contains(com.example.data.model.StemType.SOPRANO))
+    assertTrue(types.contains(com.example.data.model.StemType.CONTRALTO))
+    assertTrue(types.contains(com.example.data.model.StemType.TENOR))
+    assertTrue(types.contains(com.example.data.model.StemType.BAIXO))
+    assertTrue(types.contains(com.example.data.model.StemType.INSTRUMENTAL))
+    assertTrue(types.contains(com.example.data.model.StemType.VOCAL_FULL))
+    assertEquals(8, types.size)
+  }
 }
