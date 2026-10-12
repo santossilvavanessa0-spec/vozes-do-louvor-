@@ -16,6 +16,8 @@ data class HealthResponse(
 
 @JsonClass(generateAdapter = true)
 data class StemsResponse(
+    val solo: String? = null,
+    @Json(name = "back_vocal") val backVocal: String? = null,
     val soprano: String? = null,
     val contralto: String? = null,
     val tenor: String? = null,

@@ -19,11 +19,13 @@ val AccentGoldLight = Color(0xFFFFE699)
 val AccentGoldDark = Color(0xFFE5A93C)
 
 // Vocal Stem Distinct Identification Colors
-val StemSoprano = Color(0xFFFF4D88)   // Soprano - Vibrant coral rose
-val StemContralto = Color(0xFFFFB03B) // Contralto - Warm amber gold
-val StemTenor = Color(0xFF8B5CF6)     // Tenor - Royal electric purple
-val StemBaixo = Color(0xFF06B6D4)     // Baixo / Bass - Luminous cyan blue
-val StemVocalFull = Color(0xFFA855F7) // All Vocals - Electric Violet
+val StemSolo = Color(0xFFFFD15C)        // Solo / Voz Principal - Radiant Worship Gold
+val StemBackVocal = Color(0xFF38BDF8)   // Back Vocal Completo - Sky Blue
+val StemSoprano = Color(0xFFFF4D88)     // Soprano - Vibrant coral rose
+val StemContralto = Color(0xFFFFB03B)   // Contralto - Warm amber gold
+val StemTenor = Color(0xFF8B5CF6)       // Tenor - Royal electric purple
+val StemBaixo = Color(0xFF06B6D4)       // Baixo / Bass - Luminous cyan blue
+val StemVocalFull = Color(0xFFA855F7)   // All Vocals - Electric Violet
 val StemInstrumental = Color(0xFF10B981) // Instrumental - Emerald green
 
 // Text & Status

@@ -150,10 +150,12 @@ class AudioSeparationHandler(http.server.BaseHTTPRequestHandler):
 
         vocals_path = os.path.join(stems_dir, "vocals.wav")
         instrumental_path = os.path.join(stems_dir, "instrumental.wav")
-        soprano_path = os.path.join(stems_dir, "soprano.wav")
-        contralto_path = os.path.join(stems_dir, "contralto.wav")
-        tenor_path = os.path.join(stems_dir, "tenor.wav")
-        baixo_path = os.path.join(stems_dir, "baixo.wav")
+        solo_path = os.path.join(stems_dir, "solo.wav")
+        back_vocal_path = os.path.join(stems_dir, "back_vocal.wav")
+        soprano_path = os.path.join(stems_dir, "back_soprano.wav")
+        contralto_path = os.path.join(stems_dir, "back_contralto.wav")
+        tenor_path = os.path.join(stems_dir, "back_tenor.wav")
+        baixo_path = os.path.join(stems_dir, "back_baixo.wav")
 
         # 1. Clean Instrumental: Center-channel vocal reduction and stereo accompaniment extraction
         subprocess.run([
@@ -169,34 +171,48 @@ class AudioSeparationHandler(http.server.BaseHTTPRequestHandler):
             "-ar", "44100", "-ac", "2", vocals_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 3. Soprano: Linha feminina aguda isolada (rejeita tenores e contraltos graves)
-        # Corta frequências abaixo de 520Hz com múltiplos polos, entalhe na região de tenor (220Hz) e contralto grave (340Hz)
+        # 3. Solo / Voz Principal: Extração da voz frontal condutora (centro acústico + realce de presença e corte de reverberação de coro)
         subprocess.run([
             "ffmpeg", "-y", "-i", vocals_path,
+            "-af", "highpass=f=120,equalizer=f=2200:t=q:w=1.0:g=5,equalizer=f=3500:t=q:w=1.2:g=4,volume=2.2",
+            "-ar", "44100", "-ac", "2", solo_path
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # 4. Back Vocal Completo: Extração das vozes de apoio harmônicas (atenua o solo frontal seco e preserva abertura vocal)
+        subprocess.run([
+            "ffmpeg", "-y", "-i", input_audio_path,
+            "-af", "pan=stereo|c0=1.0*c0-0.7*c1|c1=1.0*c1-0.7*c0,highpass=f=150,lowpass=f=7500,equalizer=f=1600:t=q:w=1.1:g=3.5,volume=2.4",
+            "-ar", "44100", "-ac", "2", back_vocal_path
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # 5. Soprano do Back Vocal: Linha feminina aguda isolada (rejeita tenores e contraltos graves)
+        # Corta frequências abaixo de 520Hz com múltiplos polos, entalhe na região de tenor (220Hz) e contralto grave (340Hz)
+        subprocess.run([
+            "ffmpeg", "-y", "-i", back_vocal_path,
             "-af", "bandreject=f=220:w=160,bandreject=f=340:w=180,highpass=f=520:p=2,highpass=f=520:p=2,equalizer=f=680:t=q:w=1.5:g=6,equalizer=f=2800:t=q:w=1.2:g=5,volume=2.6",
             "-ar", "44100", "-ac", "2", soprano_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 4. Contralto: Linha feminina média/grave isolada (rejeita sopranos agudos e tenores graves)
+        # 6. Contralto do Back Vocal: Linha feminina média/grave isolada (rejeita sopranos agudos e tenores graves)
         # Isola tessitura 340Hz - 560Hz; rejeita soprano (>680Hz) e tenor/baixo (<220Hz)
         subprocess.run([
-            "ffmpeg", "-y", "-i", vocals_path,
+            "ffmpeg", "-y", "-i", back_vocal_path,
             "-af", "bandreject=f=220:w=140,bandreject=f=750:w=260,highpass=f=320:p=2,highpass=f=320:p=2,lowpass=f=580:p=2,lowpass=f=580:p=2,equalizer=f=420:t=q:w=1.2:g=6,volume=2.8",
             "-ar", "44100", "-ac", "2", contralto_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 5. Tenor: Linha masculina aguda isolada (rejeita contraltos e sopranos)
+        # 7. Tenor do Back Vocal: Linha masculina aguda isolada (rejeita contraltos e sopranos)
         # Isola tessitura 160Hz - 320Hz; rejeita contralto (>420Hz) e soprano (>650Hz)
         subprocess.run([
-            "ffmpeg", "-y", "-i", vocals_path,
+            "ffmpeg", "-y", "-i", back_vocal_path,
             "-af", "bandreject=f=440:w=180,bandreject=f=700:w=260,highpass=f=150:p=2,highpass=f=150:p=2,lowpass=f=320:p=2,lowpass=f=320:p=2,equalizer=f=220:t=q:w=1.2:g=6,volume=3.0",
             "-ar", "44100", "-ac", "2", tenor_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 6. Baixo: Linha masculina grave isolada (rejeita todas as vozes médias e agudas)
+        # 8. Baixo do Back Vocal: Linha masculina grave isolada (rejeita todas as vozes médias e agudas)
         # Isola tessitura 70Hz - 180Hz; rejeita acima de 200Hz
         subprocess.run([
-            "ffmpeg", "-y", "-i", vocals_path,
+            "ffmpeg", "-y", "-i", back_vocal_path,
             "-af", "bandreject=f=350:w=200,bandreject=f=580:w=260,highpass=f=60:p=2,lowpass=f=190:p=2,lowpass=f=190:p=2,equalizer=f=110:t=q:w=1.0:g=6,volume=3.2",
             "-ar", "44100", "-ac", "2", baixo_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -218,10 +234,12 @@ class AudioSeparationHandler(http.server.BaseHTTPRequestHandler):
             "duration_seconds": duration_sec,
             "polyphony_detected": True,
             "stems": {
-                "soprano": f"/api/download/{task_id}/soprano.wav",
-                "contralto": f"/api/download/{task_id}/contralto.wav",
-                "tenor": f"/api/download/{task_id}/tenor.wav",
-                "baixo": f"/api/download/{task_id}/baixo.wav",
+                "solo": f"/api/download/{task_id}/solo.wav",
+                "back_vocal": f"/api/download/{task_id}/back_vocal.wav",
+                "soprano": f"/api/download/{task_id}/back_soprano.wav",
+                "contralto": f"/api/download/{task_id}/back_contralto.wav",
+                "tenor": f"/api/download/{task_id}/back_tenor.wav",
+                "baixo": f"/api/download/{task_id}/back_baixo.wav",
                 "instrumental": f"/api/download/{task_id}/instrumental.wav",
                 "vocals": f"/api/download/{task_id}/vocals.wav"
             }

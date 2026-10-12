@@ -137,12 +137,14 @@ class PraiseRepository(
             )
 
             val stemConfigs = listOf(
-                Triple(StemType.SOPRANO, "Soprano", "Voz feminina aguda isolada (C4 a C6)"),
-                Triple(StemType.CONTRALTO, "Contralto (Alto)", "Voz feminina média/grave isolada (F3 a F5)"),
-                Triple(StemType.TENOR, "Tenor", "Voz masculina aguda isolada (C3 a C5)"),
-                Triple(StemType.BAIXO, "Baixo (Bass)", "Voz masculina grave isolada (E2 a E4)"),
+                Triple(StemType.SOLO, "Solo / Voz Principal", "Voz condutora principal isolada (melodia frontal)"),
+                Triple(StemType.BACK_VOCAL, "Back Vocal Completo", "Vozes de apoio harmônicas completas"),
+                Triple(StemType.SOPRANO, "Soprano (Back Vocal)", "Linha feminina aguda isolada do coro (C4 a C6)"),
+                Triple(StemType.CONTRALTO, "Contralto (Back Vocal)", "Linha feminina média/grave isolada do coro (F3 a F5)"),
+                Triple(StemType.TENOR, "Tenor (Back Vocal)", "Linha masculina aguda isolada do coro (C3 a C5)"),
+                Triple(StemType.BAIXO, "Baixo (Back Vocal)", "Linha masculina grave isolada do coro (E2 a E4)"),
                 Triple(StemType.INSTRUMENTAL, "Instrumental", "Acompanhamento musical sem as vozes"),
-                Triple(StemType.VOCAL_FULL, "Vozes Completas", "Vocal original isolado completo")
+                Triple(StemType.VOCAL_FULL, "Vocal Original Completo", "Mix vocal original de referência")
             )
 
             val stemsToInsert = mutableListOf<StemTrack>()
@@ -151,6 +153,8 @@ class PraiseRepository(
                 if (!file.exists() || file.length() < 1024) continue
 
                 val freq = when (type) {
+                    StemType.SOLO -> "120 Hz - 4000 Hz (Frontal)"
+                    StemType.BACK_VOCAL -> "150 Hz - 7500 Hz (Harmonia)"
                     StemType.SOPRANO -> "260 Hz - 1050 Hz"
                     StemType.CONTRALTO -> "175 Hz - 700 Hz"
                     StemType.TENOR -> "130 Hz - 500 Hz"
@@ -225,12 +229,14 @@ class PraiseRepository(
 
         val cleanBaseUrl = if (backendUrl.endsWith("/")) backendUrl.dropLast(1) else backendUrl
         val stemConfigs = listOf(
-            Triple(StemType.SOPRANO, "Soprano", sepResponse.stems.soprano),
-            Triple(StemType.CONTRALTO, "Contralto (Alto)", sepResponse.stems.contralto),
-            Triple(StemType.TENOR, "Tenor", sepResponse.stems.tenor),
-            Triple(StemType.BAIXO, "Baixo (Bass)", sepResponse.stems.baixo),
+            Triple(StemType.SOLO, "Solo / Voz Principal", sepResponse.stems.solo),
+            Triple(StemType.BACK_VOCAL, "Back Vocal Completo", sepResponse.stems.backVocal),
+            Triple(StemType.SOPRANO, "Soprano (Back Vocal)", sepResponse.stems.soprano),
+            Triple(StemType.CONTRALTO, "Contralto (Back Vocal)", sepResponse.stems.contralto),
+            Triple(StemType.TENOR, "Tenor (Back Vocal)", sepResponse.stems.tenor),
+            Triple(StemType.BAIXO, "Baixo (Back Vocal)", sepResponse.stems.baixo),
             Triple(StemType.INSTRUMENTAL, "Instrumental", sepResponse.stems.instrumental),
-            Triple(StemType.VOCAL_FULL, "Vozes Completas", sepResponse.stems.vocals)
+            Triple(StemType.VOCAL_FULL, "Vocal Original Completo", sepResponse.stems.vocals)
         )
 
         val stemsToInsert = mutableListOf<StemTrack>()
@@ -248,15 +254,19 @@ class PraiseRepository(
             validateAudioIntegrity(destFile)
 
             val desc = when (type) {
-                StemType.SOPRANO -> "Voz feminina aguda isolada (C4 a C6)"
-                StemType.CONTRALTO -> "Voz feminina média/grave isolada (F3 a F5)"
-                StemType.TENOR -> "Voz masculina aguda isolada (C3 a C5)"
-                StemType.BAIXO -> "Voz masculina grave isolada (E2 a E4)"
-                StemType.INSTRUMENTAL -> "Acompanhamento musical sem vozes"
-                StemType.VOCAL_FULL -> "Vocal original isolado completo"
+                StemType.SOLO -> "Voz condutora principal isolada (melodia frontal)"
+                StemType.BACK_VOCAL -> "Vozes de apoio harmônicas completas"
+                StemType.SOPRANO -> "Linha feminina aguda isolada do coro (C4 a C6)"
+                StemType.CONTRALTO -> "Linha feminina média/grave isolada do coro (F3 a F5)"
+                StemType.TENOR -> "Linha masculina aguda isolada do coro (C3 a C5)"
+                StemType.BAIXO -> "Linha masculina grave isolada do coro (E2 a E4)"
+                StemType.INSTRUMENTAL -> "Acompanhamento musical sem as vozes"
+                StemType.VOCAL_FULL -> "Mix vocal original de referência"
             }
 
             val freq = when (type) {
+                StemType.SOLO -> "120 Hz - 4000 Hz (Frontal)"
+                StemType.BACK_VOCAL -> "150 Hz - 7500 Hz (Harmonia)"
                 StemType.SOPRANO -> "260 Hz - 1050 Hz"
                 StemType.CONTRALTO -> "175 Hz - 700 Hz"
                 StemType.TENOR -> "130 Hz - 500 Hz"
@@ -350,12 +360,14 @@ class PraiseRepository(
             sampleDir.mkdirs()
 
             val stemConfigs = listOf(
-                Triple(StemType.SOPRANO, "Soprano", "260 Hz - 1050 Hz"),
-                Triple(StemType.CONTRALTO, "Contralto (Alto)", "175 Hz - 700 Hz"),
-                Triple(StemType.TENOR, "Tenor", "130 Hz - 500 Hz"),
-                Triple(StemType.BAIXO, "Baixo (Bass)", "80 Hz - 350 Hz"),
+                Triple(StemType.SOLO, "Solo / Voz Principal", "120 Hz - 4000 Hz"),
+                Triple(StemType.BACK_VOCAL, "Back Vocal Completo", "150 Hz - 7500 Hz"),
+                Triple(StemType.SOPRANO, "Soprano (Back Vocal)", "260 Hz - 1050 Hz"),
+                Triple(StemType.CONTRALTO, "Contralto (Back Vocal)", "175 Hz - 700 Hz"),
+                Triple(StemType.TENOR, "Tenor (Back Vocal)", "130 Hz - 500 Hz"),
+                Triple(StemType.BAIXO, "Baixo (Back Vocal)", "80 Hz - 350 Hz"),
                 Triple(StemType.INSTRUMENTAL, "Instrumental", "Full Spectrum"),
-                Triple(StemType.VOCAL_FULL, "Vozes Completas", "Full Vocal")
+                Triple(StemType.VOCAL_FULL, "Vocal Original Completo", "Full Vocal")
             )
 
             val starterStems = mutableListOf<StemTrack>()
@@ -389,7 +401,9 @@ class PraiseRepository(
 
         // Harmonic frequencies for Sol Maior (G major chord progression: G - Em - C - D)
         val (baseFreq, harmonicFreq) = when (type) {
-            StemType.SOPRANO -> Pair(392.00, 587.33) // G4, D5 (agudo)
+            StemType.SOLO -> Pair(392.00, 784.00) // G4, G5 (voz condutora principal)
+            StemType.BACK_VOCAL -> Pair(329.63, 493.88) // E4, B4 (harmonias de coro)
+            StemType.SOPRANO -> Pair(392.00, 587.33) // G4, D5 (agudo feminino)
             StemType.CONTRALTO -> Pair(329.63, 440.00) // E4, A4 (médio/grave feminino)
             StemType.TENOR -> Pair(261.63, 392.00) // C4, G4 (masculino agudo)
             StemType.BAIXO -> Pair(98.00, 146.83) // G2, D3 (grave)

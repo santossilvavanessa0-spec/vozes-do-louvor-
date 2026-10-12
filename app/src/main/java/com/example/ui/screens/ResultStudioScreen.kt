@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -84,6 +85,8 @@ import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.PrimaryPurple
 import com.example.ui.theme.PrimaryPurpleDark
 import com.example.ui.theme.PrimaryPurpleLight
+import com.example.ui.theme.StemSolo
+import com.example.ui.theme.StemBackVocal
 import com.example.ui.theme.StemBaixo
 import com.example.ui.theme.StemContralto
 import com.example.ui.theme.StemInstrumental
@@ -338,7 +341,7 @@ fun ResultStudioScreen(
             }
         }
 
-        // Section Title & Quick Voice Filter
+        // Quick Voice Solo Filter Chips
         item {
             Column {
                 Row(
@@ -347,7 +350,7 @@ fun ResultStudioScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Faixas Individuais dos Naipes",
+                        text = "Faixas Isoladas por Inteligência Artificial",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = TextPrimary
                     )
@@ -360,35 +363,36 @@ fun ResultStudioScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Seletor rápido de audição isolada por naipe
                 Text(
-                    text = "Ouvir voz isolada (clique para isolar o naipe):",
+                    text = "Ouvir voz isolada (clique para isolar no estúdio):",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
-                Row(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Botão "Todos Juntos"
                     val hasSolo = playerState.trackStates.values.any { it.isSolo }
-                    FilterChip(
-                        selected = !hasSolo,
-                        onClick = { player.resetAllTracks() },
-                        label = { Text("Coro Completo", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentGold,
-                            selectedLabelColor = DarkBackground,
-                            containerColor = DarkSurfaceElevated,
-                            labelColor = TextSecondary
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.testTag("filter_all_choir")
-                    )
+                    item {
+                        FilterChip(
+                            selected = !hasSolo,
+                            onClick = { player.resetAllTracks() },
+                            label = { Text("Mix Completo", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentGold,
+                                selectedLabelColor = DarkBackground,
+                                containerColor = DarkSurfaceElevated,
+                                labelColor = TextSecondary
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.testTag("filter_all_choir")
+                        )
+                    }
 
-                    stems.filter { it.type != StemType.VOCAL_FULL }.forEach { stem ->
+                    items(stems.filter { it.type != StemType.VOCAL_FULL }) { stem ->
                         val trackState = playerState.trackStates[stem.id]
                         val isSolo = trackState?.isSolo == true
                         val color = getStemColor(stem.type)
@@ -407,7 +411,16 @@ fun ResultStudioScreen(
                             },
                             label = {
                                 Text(
-                                    text = stem.type.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    text = when (stem.type) {
+                                        StemType.SOLO -> "Solo (Voz Principal)"
+                                        StemType.BACK_VOCAL -> "Back Vocal Geral"
+                                        StemType.SOPRANO -> "Soprano"
+                                        StemType.CONTRALTO -> "Contralto"
+                                        StemType.TENOR -> "Tenor"
+                                        StemType.BAIXO -> "Baixo"
+                                        StemType.INSTRUMENTAL -> "Instrumental"
+                                        StemType.VOCAL_FULL -> "Vocal Completo"
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -426,21 +439,131 @@ fun ResultStudioScreen(
             }
         }
 
-        // Individual Stem Track Cards
-        items(stems) { stem ->
-            val trackState = playerState.trackStates[stem.id] ?: TrackPlayState(stemTrack = stem)
-            val stemColor = getStemColor(stem.type)
+        // SEÇÃO 1 — VOZ PRINCIPAL (SOLO)
+        val soloStem = stems.firstOrNull { it.type == StemType.SOLO }
+        if (soloStem != null) {
+            item {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(AccentGold)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "SEÇÃO 1 — VOZ PRINCIPAL (SOLO)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = AccentGold
+                    )
+                }
+            }
 
-            StemTrackCard(
-                stem = stem,
-                trackState = trackState,
-                stemColor = stemColor,
-                isPlaying = playerState.isPlaying && !trackState.isMuted,
-                onSoloClick = { player.toggleSolo(stem.id) },
-                onMuteClick = { player.toggleMute(stem.id) },
-                onVolumeChange = { player.setTrackVolume(stem.id, it) },
-                onDownloadClick = { onDownloadSingleStem(stem, project.title) }
-            )
+            item {
+                val trackState = playerState.trackStates[soloStem.id] ?: TrackPlayState(stemTrack = soloStem)
+                val stemColor = getStemColor(soloStem.type)
+
+                StemTrackCard(
+                    stem = soloStem,
+                    trackState = trackState,
+                    stemColor = stemColor,
+                    isPlaying = playerState.isPlaying && !trackState.isMuted,
+                    onSoloClick = { player.toggleSolo(soloStem.id) },
+                    onMuteClick = { player.toggleMute(soloStem.id) },
+                    onVolumeChange = { player.setTrackVolume(soloStem.id, it) },
+                    onDownloadClick = { onDownloadSingleStem(soloStem, project.title) }
+                )
+            }
+        }
+
+        // SEÇÃO 2 — BACK VOCAL POR NAIPE
+        val backVocalStems = stems.filter {
+            it.type in listOf(StemType.BACK_VOCAL, StemType.SOPRANO, StemType.CONTRALTO, StemType.TENOR, StemType.BAIXO)
+        }
+        if (backVocalStems.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryPurpleLight)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "SEÇÃO 2 — BACK VOCAL POR NAIPE",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = PrimaryPurpleLight
+                    )
+                }
+            }
+
+            items(backVocalStems) { stem ->
+                val trackState = playerState.trackStates[stem.id] ?: TrackPlayState(stemTrack = stem)
+                val stemColor = getStemColor(stem.type)
+
+                StemTrackCard(
+                    stem = stem,
+                    trackState = trackState,
+                    stemColor = stemColor,
+                    isPlaying = playerState.isPlaying && !trackState.isMuted,
+                    onSoloClick = { player.toggleSolo(stem.id) },
+                    onMuteClick = { player.toggleMute(stem.id) },
+                    onVolumeChange = { player.setTrackVolume(stem.id, it) },
+                    onDownloadClick = { onDownloadSingleStem(stem, project.title) }
+                )
+            }
+        }
+
+        // SEÇÃO 3 — ACOMPANHAMENTO E REFERÊNCIA
+        val otherStems = stems.filter {
+            it.type in listOf(StemType.INSTRUMENTAL, StemType.VOCAL_FULL)
+        }
+        if (otherStems.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(StemInstrumental)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "SEÇÃO 3 — INSTRUMENTAL E REFERÊNCIA",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = StemInstrumental
+                    )
+                }
+            }
+
+            items(otherStems) { stem ->
+                val trackState = playerState.trackStates[stem.id] ?: TrackPlayState(stemTrack = stem)
+                val stemColor = getStemColor(stem.type)
+
+                StemTrackCard(
+                    stem = stem,
+                    trackState = trackState,
+                    stemColor = stemColor,
+                    isPlaying = playerState.isPlaying && !trackState.isMuted,
+                    onSoloClick = { player.toggleSolo(stem.id) },
+                    onMuteClick = { player.toggleMute(stem.id) },
+                    onVolumeChange = { player.setTrackVolume(stem.id, it) },
+                    onDownloadClick = { onDownloadSingleStem(stem, project.title) }
+                )
+            }
         }
 
         // Batch Download Section
@@ -714,6 +837,8 @@ fun StemTrackCard(
 }
 
 private fun getStemColor(type: StemType): Color = when (type) {
+    StemType.SOLO -> StemSolo
+    StemType.BACK_VOCAL -> StemBackVocal
     StemType.SOPRANO -> StemSoprano
     StemType.CONTRALTO -> StemContralto
     StemType.TENOR -> StemTenor
