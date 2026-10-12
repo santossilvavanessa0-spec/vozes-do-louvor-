@@ -215,20 +215,47 @@ object OnDeviceAudioSeparator {
         writeWavHeaderPlaceholder(fosInst)
         writeWavHeaderPlaceholder(fosVocal)
 
-        // Filtros biquad suaves para realce e equilíbrio dos naipes
-        val sopranoPresenceFilter = BiquadPeaking(sampleRate, centerFreq = 1200.0, gainDb = 5.0, q = 0.8)
-        val sopranoTrebleAir = BiquadHighpass(sampleRate, cutoff = 320.0)
+        // Filtros em cascata de alta ordem para separação e isolamento real dos naipes vocais
+        // 1. Soprano: Agudo feminino (C4-C6). Entalhe nas fundamentais de Tenor (220Hz) e Contralto (360Hz) + Highpass 4ª ordem em 520Hz + Brilho vocal
+        val sopNotchTenor = BiquadBandstop(sampleRate, centerFreq = 220.0, q = 2.0)
+        val sopNotchContralto = BiquadBandstop(sampleRate, centerFreq = 360.0, q = 2.0)
+        val sopHp1 = BiquadHighpass(sampleRate, cutoff = 520.0)
+        val sopHp2 = BiquadHighpass(sampleRate, cutoff = 520.0)
+        val sopPresence = BiquadPeaking(sampleRate, centerFreq = 720.0, gainDb = 5.0, q = 1.2)
+        val sopAir = BiquadPeaking(sampleRate, centerFreq = 2800.0, gainDb = 4.0, q = 1.0)
 
-        val contraltoBodyFilter = BiquadPeaking(sampleRate, centerFreq = 480.0, gainDb = 4.5, q = 0.9)
-        val tenorPresenceFilter = BiquadPeaking(sampleRate, centerFreq = 320.0, gainDb = 4.5, q = 0.9)
-        val baixoBodyFilter = BiquadLowpass(sampleRate, cutoff = 280.0)
+        // 2. Contralto: Médio/grave feminino (F3-F5 ~ 340-580Hz). Entalhe em Tenor (220Hz) e Soprano (750Hz) + Bandpass 4ª ordem (Hp 320Hz + Lp 580Hz)
+        val conNotchTenor = BiquadBandstop(sampleRate, centerFreq = 220.0, q = 2.0)
+        val conNotchSoprano = BiquadBandstop(sampleRate, centerFreq = 750.0, q = 2.0)
+        val conHp1 = BiquadHighpass(sampleRate, cutoff = 320.0)
+        val conHp2 = BiquadHighpass(sampleRate, cutoff = 320.0)
+        val conLp1 = BiquadLowpass(sampleRate, cutoff = 580.0)
+        val conLp2 = BiquadLowpass(sampleRate, cutoff = 580.0)
+        val conBody = BiquadPeaking(sampleRate, centerFreq = 420.0, gainDb = 5.0, q = 1.2)
 
-        val vocalPresenceFilter = BiquadPeaking(sampleRate, centerFreq = 2200.0, gainDb = 3.0, q = 0.7)
+        // 3. Tenor: Agudo masculino (C3-C5 ~ 150-320Hz). Entalhe em Contralto (440Hz) e Soprano (700Hz) + Bandpass 4ª ordem (Hp 150Hz + Lp 320Hz)
+        val tenNotchContralto = BiquadBandstop(sampleRate, centerFreq = 440.0, q = 2.0)
+        val tenNotchSoprano = BiquadBandstop(sampleRate, centerFreq = 700.0, q = 2.0)
+        val tenHp1 = BiquadHighpass(sampleRate, cutoff = 150.0)
+        val tenHp2 = BiquadHighpass(sampleRate, cutoff = 150.0)
+        val tenLp1 = BiquadLowpass(sampleRate, cutoff = 320.0)
+        val tenLp2 = BiquadLowpass(sampleRate, cutoff = 320.0)
+        val tenChest = BiquadPeaking(sampleRate, centerFreq = 220.0, gainDb = 5.0, q = 1.2)
+
+        // 4. Baixo: Grave masculino (E2-E4 ~ 60-190Hz). Rejeita todas as vozes médias/agudas
+        val baiNotchMid = BiquadBandstop(sampleRate, centerFreq = 350.0, q = 1.8)
+        val baiNotchHigh = BiquadBandstop(sampleRate, centerFreq = 600.0, q = 1.8)
+        val baiHp = BiquadHighpass(sampleRate, cutoff = 60.0)
+        val baiLp1 = BiquadLowpass(sampleRate, cutoff = 190.0)
+        val baiLp2 = BiquadLowpass(sampleRate, cutoff = 190.0)
+        val baiResonance = BiquadPeaking(sampleRate, centerFreq = 110.0, gainDb = 5.5, q = 1.0)
+
+        // 5. Vocal Completo (Isolamento de centro vocal)
+        val vocalPresenceFilter = BiquadPeaking(sampleRate, centerFreq = 2000.0, gainDb = 3.0, q = 0.8)
 
         val inBufferSize = 8192
         val inBuffer = ByteArray(inBufferSize)
 
-        // Tamanho de saída com margem segura (até estéreo)
         val outBufferSize = 16384
         val outSoprano = ByteArray(outBufferSize)
         val outContralto = ByteArray(outBufferSize)
@@ -268,39 +295,58 @@ object OnDeviceAudioSeparator {
                     val leftF = sampleLeft.toFloat()
                     val rightF = sampleRight.toFloat()
 
-                    // 1. Instrumental: Cancelamento do centro vocal (Side = Left - Right) + atenuação harmônica
+                    // 1. Instrumental: Cancelamento do centro vocal (L - R) + acompanhamento estéreo limpo
                     val sideDiff = (leftF - rightF) * 0.95f
                     val centerMono = (leftF + rightF) * 0.5f
+                    val instSample = (sideDiff * 0.90f + (leftF * 0.15f)).coerceIn(-32767f, 32767f).toInt().toShort()
 
-                    // No instrumental, preservamos as laterais e o grave rítmico
-                    val instSample = (sideDiff * 0.85f + (leftF * 0.2f)).coerceIn(-32767f, 32767f).toInt().toShort()
-
-                    // 2. Vozes Completas: Centro vocal isolado com realce de inteligibilidade
+                    // 2. Vozes Completas: Centro vocal com presença
                     val vocalNatural = centerMono
                     val vocalEnhanced = vocalPresenceFilter.process(vocalNatural)
-                    val vocalSample = (vocalNatural * 0.65f + vocalEnhanced * 0.45f)
+                    val vocalSample = (vocalNatural * 0.70f + vocalEnhanced * 0.40f)
                         .coerceIn(-32767f, 32767f).toInt().toShort()
 
-                    // 3. Soprano: Voz cantada real preservada com destaque para a região aguda feminina (C4-C6)
-                    val sopAir = sopranoTrebleAir.process(vocalNatural)
-                    val sopPeak = sopranoPresenceFilter.process(sopAir)
-                    val sopranoSample = (vocalNatural * 0.40f + sopPeak * 0.70f)
-                        .coerceIn(-32767f, 32767f).toInt().toShort()
+                    // 3. Soprano: Isolamento puro da linha de soprano (rejeita contraltos e tenores)
+                    var sop = centerMono
+                    sop = sopNotchTenor.process(sop)
+                    sop = sopNotchContralto.process(sop)
+                    sop = sopHp1.process(sop)
+                    sop = sopHp2.process(sop)
+                    sop = sopPresence.process(sop)
+                    sop = sopAir.process(sop)
+                    val sopranoSample = (sop * 2.6f).coerceIn(-32767f, 32767f).toInt().toShort()
 
-                    // 4. Contralto: Voz cantada real preservada com ênfase no corpo médio/grave feminino (F3-F5)
-                    val conPeak = contraltoBodyFilter.process(vocalNatural)
-                    val contraltoSample = (vocalNatural * 0.45f + conPeak * 0.65f)
-                        .coerceIn(-32767f, 32767f).toInt().toShort()
+                    // 4. Contralto: Isolamento puro da linha de contralto (rejeita sopranos e tenores)
+                    var con = centerMono
+                    con = conNotchTenor.process(con)
+                    con = conNotchSoprano.process(con)
+                    con = conHp1.process(con)
+                    con = conHp2.process(con)
+                    con = conLp1.process(con)
+                    con = conLp2.process(con)
+                    con = conBody.process(con)
+                    val contraltoSample = (con * 2.8f).coerceIn(-32767f, 32767f).toInt().toShort()
 
-                    // 5. Tenor: Voz cantada real preservada com presença na tessitura masculina aguda (C3-C5)
-                    val tenPeak = tenorPresenceFilter.process(vocalNatural)
-                    val tenorSample = (vocalNatural * 0.45f + tenPeak * 0.65f)
-                        .coerceIn(-32767f, 32767f).toInt().toShort()
+                    // 5. Tenor: Isolamento puro da linha de tenor (rejeita contraltos e sopranos)
+                    var ten = centerMono
+                    ten = tenNotchContralto.process(ten)
+                    ten = tenNotchSoprano.process(ten)
+                    ten = tenHp1.process(ten)
+                    ten = tenHp2.process(ten)
+                    ten = tenLp1.process(ten)
+                    ten = tenLp2.process(ten)
+                    ten = tenChest.process(ten)
+                    val tenorSample = (ten * 3.0f).coerceIn(-32767f, 32767f).toInt().toShort()
 
-                    // 6. Baixo: Voz masculina grave e peso harmônico (E2-E4)
-                    val baiLow = baixoBodyFilter.process(vocalNatural)
-                    val baixoSample = (vocalNatural * 0.35f + baiLow * 0.75f)
-                        .coerceIn(-32767f, 32767f).toInt().toShort()
+                    // 6. Baixo: Isolamento puro da linha de baixo
+                    var bai = centerMono
+                    bai = baiNotchMid.process(bai)
+                    bai = baiNotchHigh.process(bai)
+                    bai = baiHp.process(bai)
+                    bai = baiLp1.process(bai)
+                    bai = baiLp2.process(bai)
+                    bai = baiResonance.process(bai)
+                    val baixoSample = (bai * 3.2f).coerceIn(-32767f, 32767f).toInt().toShort()
 
                     fun putShort(buf: ByteArray, idx: Int, v: Short) {
                         buf[idx] = (v.toInt() and 0xFF).toByte()
@@ -406,6 +452,30 @@ object OnDeviceAudioSeparator {
             b2 = (1.0 - alpha * a) / a0
             a1 = (-2.0 * cosW0) / a0
             a2 = (1.0 - alpha / a) / a0
+        }
+
+        fun process(x: Float): Float {
+            val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            x2 = x1; x1 = x.toDouble(); y2 = y1; y1 = y
+            return y.toFloat()
+        }
+    }
+
+    private class BiquadBandstop(sampleRate: Int, centerFreq: Double, q: Double = 1.8) {
+        var b0 = 1.0; var b1 = 0.0; var b2 = 0.0; var a1 = 0.0; var a2 = 0.0
+        var x1 = 0.0; var x2 = 0.0; var y1 = 0.0; var y2 = 0.0
+
+        init {
+            val w0 = 2.0 * PI * centerFreq / sampleRate
+            val alpha = sin(w0) / (2.0 * q)
+            val cosW0 = cos(w0)
+            val a0 = 1.0 + alpha
+
+            b0 = 1.0 / a0
+            b1 = (-2.0 * cosW0) / a0
+            b2 = 1.0 / a0
+            a1 = (-2.0 * cosW0) / a0
+            a2 = (1.0 - alpha) / a0
         }
 
         fun process(x: Float): Float {

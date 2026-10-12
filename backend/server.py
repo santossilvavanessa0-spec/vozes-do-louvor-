@@ -155,45 +155,49 @@ class AudioSeparationHandler(http.server.BaseHTTPRequestHandler):
         tenor_path = os.path.join(stems_dir, "tenor.wav")
         baixo_path = os.path.join(stems_dir, "baixo.wav")
 
-        # 1. Clean Instrumental: Center-channel vocal reduction and accompaniment isolation
+        # 1. Clean Instrumental: Center-channel vocal reduction and stereo accompaniment extraction
         subprocess.run([
             "ffmpeg", "-y", "-i", input_audio_path,
-            "-af", "pan=stereo|c0=c0-c1|c1=c1-c0,volume=1.5",
+            "-af", "pan=stereo|c0=c0-c1|c1=c1-c0,highpass=f=40,volume=1.5",
             "-ar", "44100", "-ac", "2", instrumental_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 2. Clean Vocals: Center channel isolation + vocal presence filter
+        # 2. Clean Vocals: Center channel vocal isolation with full human vocal spectrum
         subprocess.run([
             "ffmpeg", "-y", "-i", input_audio_path,
-            "-af", "pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1,highpass=f=120,lowpass=f=7500,equalizer=f=1800:t=q:w=1.2:g=5",
+            "-af", "pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1,highpass=f=90,lowpass=f=8000,equalizer=f=2000:t=q:w=1.2:g=3",
             "-ar", "44100", "-ac", "2", vocals_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 3. Soprano: Agudo feminino (C4-C6 ~ 260Hz a 1050Hz + brilho harmônico)
+        # 3. Soprano: Linha feminina aguda isolada (rejeita tenores e contraltos graves)
+        # Corta frequências abaixo de 520Hz com múltiplos polos, entalhe na região de tenor (220Hz) e contralto grave (340Hz)
         subprocess.run([
             "ffmpeg", "-y", "-i", vocals_path,
-            "-af", "highpass=f=260,equalizer=f=650:t=q:w=1.5:g=6,equalizer=f=2800:t=q:w=1.0:g=4,volume=1.2",
+            "-af", "bandreject=f=220:w=160,bandreject=f=340:w=180,highpass=f=520:p=2,highpass=f=520:p=2,equalizer=f=680:t=q:w=1.5:g=6,equalizer=f=2800:t=q:w=1.2:g=5,volume=2.6",
             "-ar", "44100", "-ac", "2", soprano_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 4. Contralto: Médio/grave feminino (F3-F5 ~ 175Hz a 700Hz + formantes quentes)
+        # 4. Contralto: Linha feminina média/grave isolada (rejeita sopranos agudos e tenores graves)
+        # Isola tessitura 340Hz - 560Hz; rejeita soprano (>680Hz) e tenor/baixo (<220Hz)
         subprocess.run([
             "ffmpeg", "-y", "-i", vocals_path,
-            "-af", "bandpass=f=420:w=380,equalizer=f=380:t=q:w=1.2:g=5,volume=1.3",
+            "-af", "bandreject=f=220:w=140,bandreject=f=750:w=260,highpass=f=320:p=2,highpass=f=320:p=2,lowpass=f=580:p=2,lowpass=f=580:p=2,equalizer=f=420:t=q:w=1.2:g=6,volume=2.8",
             "-ar", "44100", "-ac", "2", contralto_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 5. Tenor: Agudo masculino (C3-C5 ~ 130Hz a 500Hz)
+        # 5. Tenor: Linha masculina aguda isolada (rejeita contraltos e sopranos)
+        # Isola tessitura 160Hz - 320Hz; rejeita contralto (>420Hz) e soprano (>650Hz)
         subprocess.run([
             "ffmpeg", "-y", "-i", vocals_path,
-            "-af", "bandpass=f=260:w=240,equalizer=f=240:t=q:w=1.2:g=5,volume=1.3",
+            "-af", "bandreject=f=440:w=180,bandreject=f=700:w=260,highpass=f=150:p=2,highpass=f=150:p=2,lowpass=f=320:p=2,lowpass=f=320:p=2,equalizer=f=220:t=q:w=1.2:g=6,volume=3.0",
             "-ar", "44100", "-ac", "2", tenor_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 6. Baixo: Grave masculino (E2-E4 ~ 80Hz a 350Hz)
+        # 6. Baixo: Linha masculina grave isolada (rejeita todas as vozes médias e agudas)
+        # Isola tessitura 70Hz - 180Hz; rejeita acima de 200Hz
         subprocess.run([
             "ffmpeg", "-y", "-i", vocals_path,
-            "-af", "lowpass=f=350,equalizer=f=140:t=q:w=1.0:g=6,volume=1.4",
+            "-af", "bandreject=f=350:w=200,bandreject=f=580:w=260,highpass=f=60:p=2,lowpass=f=190:p=2,lowpass=f=190:p=2,equalizer=f=110:t=q:w=1.0:g=6,volume=3.2",
             "-ar", "44100", "-ac", "2", baixo_path
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

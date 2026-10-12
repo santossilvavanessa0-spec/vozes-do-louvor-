@@ -338,23 +338,91 @@ fun ResultStudioScreen(
             }
         }
 
-        // Section Title
+        // Section Title & Quick Voice Filter
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Faixas Individuais dos Naipes",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "${stems.size} faixas geradas",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Seletor rápido de audição isolada por naipe
                 Text(
-                    text = "Faixas Individuais dos Naipes",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = TextPrimary
-                )
-                Text(
-                    text = "${stems.size} faixas geradas",
+                    text = "Ouvir voz isolada (clique para isolar o naipe):",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted
+                    color = TextSecondary
                 )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Botão "Todos Juntos"
+                    val hasSolo = playerState.trackStates.values.any { it.isSolo }
+                    FilterChip(
+                        selected = !hasSolo,
+                        onClick = { player.resetAllTracks() },
+                        label = { Text("Coro Completo", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AccentGold,
+                            selectedLabelColor = DarkBackground,
+                            containerColor = DarkSurfaceElevated,
+                            labelColor = TextSecondary
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.testTag("filter_all_choir")
+                    )
+
+                    stems.filter { it.type != StemType.VOCAL_FULL }.forEach { stem ->
+                        val trackState = playerState.trackStates[stem.id]
+                        val isSolo = trackState?.isSolo == true
+                        val color = getStemColor(stem.type)
+
+                        FilterChip(
+                            selected = isSolo,
+                            onClick = {
+                                if (isSolo) {
+                                    player.resetAllTracks()
+                                } else {
+                                    player.soloOnly(stem.id)
+                                    if (!playerState.isPlaying) {
+                                        player.play()
+                                    }
+                                }
+                            },
+                            label = {
+                                Text(
+                                    text = stem.type.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = color,
+                                selectedLabelColor = DarkBackground,
+                                containerColor = DarkSurfaceElevated,
+                                labelColor = if (isSolo) DarkBackground else color
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.testTag("quick_solo_${stem.type.name.lowercase()}")
+                        )
+                    }
+                }
             }
         }
 
